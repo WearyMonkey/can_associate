@@ -1,6 +1,6 @@
 steal(
     "can/assoc/associative_model.js",
-    "can/assoc/associative_model.js"
+    "can/assoc/polymorphic_model.js"
 ).then(
     "can/util/deferred.js"
 ).then(function() {
@@ -75,7 +75,7 @@ steal(
             AutoSaveModel("CModel",
             {
                 associations : {
-                    hasMany : { type: "DModel", as: "DAble" }
+                    hasMany : { type: "DModel", inverseName: "d_able" }
                 }
             },
             {});
@@ -83,7 +83,7 @@ steal(
             AutoSaveModel("DModel",
             {
                 associations : {
-                    belongsTo : { type: "DAble", polymorphic: true }
+                    belongsTo : { name: "d_able", polymorphic: true }
                 }
             },
             {});
@@ -91,7 +91,7 @@ steal(
             AutoSaveModel("EModel",
             {
                 associations : {
-                    hasMany : { type: "DModel", as: "DAble" }
+                    hasMany : { type: "DModel", inverseName: "d_able" }
                 }
             },
             {});

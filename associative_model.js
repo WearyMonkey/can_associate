@@ -17,40 +17,22 @@ steal(
     }
 
     function associate(associations, Class, type) {
-        var hasMany = $.makeArray( associations[type]);
-        associations[type] = hasMany;
-        for(var i=0; i < hasMany.length;i++) {
+        var relations = $.makeArray( associations[type]);
+        associations[type] = relations;
+        for(var i=0; i < relations.length;i++) {
 
-            if (typeof hasMany[i] !== 'object') {
-                var name = Class[type]({ type: hasMany[i] });
-                hasMany[i] = {type: hasMany[i], name: name};
-            } else if (hasMany[i].via) {
-                name = Class.via(hasMany[i]);
-                hasMany[i].name = name;
+            if (typeof relations[i] !== 'object') {
+                var name = Class[type]({ type: relations[i] });
+                relations[i] = {type: relations[i], name: name};
+            } else if (relations[i].via) {
+                name = Class.via(relations[i]);
+                relations[i].name = name;
             } else {
-                name = Class[type](hasMany[i]);
-                hasMany[i].name = name;
+                name = Class[type](relations[i]);
+                relations[i].name = name;
             }
         }
-        return hasMany;
-    }
-
-    function getPolymorphicClass(className) {
-        var clazz = can.getObject(className);
-        if (!clazz)
-        {
-            clazz = can.Model(className, {}, {});
-            clazz.pluralizedName = can.pluralize(can.underscore(className.match(/\w+$/)[0]));
-        }
-        return clazz;
-    }
-
-    function getClassFromShortName(className) {
-        var clazz = can.getObject(className);
-        if (!clazz) {
-            clazz = can.getObject("Blog.Models." + className);
-        }
-        return clazz;
+        return relations;
     }
 
     can.Model('can.Model.AssociativeModel',
@@ -68,44 +50,27 @@ steal(
         },
 
         belongsTo: function(association){
-            var type = association.type;
-            var polymorphic = (association.polymorphic) ? true : false;
-            var name = association.name || can.underscore( type.match(/\w+$/)[0] );
-            var inverseName = typeof association.inverseName == "undefined" ? can.pluralize(this._shortName) : association.inverseName;
+            var type = association.type,
+                name = association.name || can.underscore( type.match(/\w+$/)[0] ),
+                inverseName = typeof association.inverseName == "undefined" ? can.pluralize(this._shortName) : association.inverseName,
+                cap = can.classize(name),
 
-            var cap = can.classize(name),
                 set = function(v) {
-                    if (polymorphic && isId(v)) throw "Should not use id for polymorphic relationship";
 
-                    var self = this;
-                    var oldItem = this[name];
-                    var clazz = (polymorphic) ? getPolymorphicClass(type) : can.getObject(type);
-                    var newItem = null;
-                    if (v)
-                    {
-                        if (v instanceof can.Model) {
-                            newItem = v;
-                        } else if (polymorphic) {
-                            if (v.type)
-                            {
-                                newItem = getModel(v, getClassFromShortName(v.type));
-                                if (!newItem) return null; // there's chance that the polymorphic object is supplied by the server, but
-                                                           // attr() for that object has not been called yet, so return here to avoid resetting the type and id
-                            }
-                            else if (this[name+"_type"])
-                            {
-                                newItem = getClassFromShortName(this[name+"_type"]).model(v);
-                            }
-                            else // attr(polyobj) has been called before attr(polyobj_type), so we store the poly object in the local.
-                                 // when attr(polyobj_type) is called, it will use this object instead of {type, id}
-                            {
-                                this._assocData.tempPolymorphicOjbect = v;
-                                return null;
-                            }
-                        } else {
-                            newItem = getModel(v, clazz);
-                        }
+                    var self = this,
+                        oldItem = this[name],
+                        clazz,
+                        newItem = null;
+
+
+                    if (v instanceof can.Model) {
+                        clazz = v.constructor;
+                        newItem = v;
+                    } else {
+                        clazz = can.getObject(type);
+                        newItem = v ? getModel(v, clazz) : v;
                     }
+
 
                     if (orgSet) orgSet.call(this, newItem);
                     else this[name] = newItem;
@@ -115,28 +80,14 @@ steal(
                     // if newItem is null or undefined, than the id should be the same, e.g. story => undefined story_id => undefined
                     var newId = isId(v) ? v : newItem ? newItem[newItem.constructor.id] : newItem;
                     if (typeof oldId == "undefined" || oldId != newId) {
-                        if (polymorphic) this._assocData.polyIgnoreId = true;
                         this.attr(idName, newId);
                     }
-
-                    if (polymorphic) {
-                        var typeName = clazz._shortName + "_type";
-                        var oldType = this[typeName];
-                        var newType = null;
-                        if (newItem) newType = newItem.constructor.shortName;
-                        if (typeof oldType == "undefined" || oldType != newType)
-                        {
-                            this._assocData.polyIgnoreType = true;
-                            this.attr(typeName, newType);
-                        }
-                    }
-
 
                     if (inverseName) {
                         // remove this from the old item inverse relationship
                         if (oldItem && (!newItem || oldItem.id != newItem.id) && oldItem[inverseName]) {
                             oldItem[inverseName].remove(this);
-                            clazz.unbind("destroyed.belongsTo_"+this._namespace);
+                            oldItem.constructor.unbind("destroyed.belongsTo_"+this._namespace);
                             this.constructor.bind("created.belongsTo_"+oldItem._namespace);
                         }
 
@@ -169,7 +120,7 @@ steal(
                     }
 
                     // if v is just and ID, then we should listen for a creation
-                    if (!newItem && isId(v) && !polymorphic) {
+                    if (!newItem && isId(v)) {
                         clazz.bind("created."+this._namespace, function(event, newItem) {
                             if (newItem.id == v) set.call(self, newItem);
                         });
@@ -180,87 +131,33 @@ steal(
                 orgSet = this.prototype["set"+cap],
                 orgSetId = this.prototype["set"+cap+"Id"];
 
-            set.doNotInhert = true;
-
             this.prototype["set"+cap] = set;
 
             this.prototype["set"+cap+"Id"] = function(id) {
                 var idName = name+"_id";
-                var typeName = name+"_type";
                 if (this[idName] === id) return id;
-                if (polymorphic && isId(id) && isId(this[idName]) && !this._assocData.polyIgnoreId) throw "Should not use id for polymorphic relationship";
-                //delete this._assocData.polyIgnoreId;
 
                 if (orgSetId) orgSetId.call(this, id);
                 else this[idName] = id;
 
-                var idsDifferent = !this[name] || this[name].id != id;
-                if (polymorphic && this[typeName] && (idsDifferent || this[name].constructor.shortName !== this[typeName])) {
-                    if ((isId(id) && this[typeName]) || (!isId(id) && !this[typeName]))
-                    {
-                        if (this._assocData.tempPolymorphicOjbect)
-                        {
-                            this.attr(name, this._assocData.tempPolymorphicOjbect);
-                            delete this._assocData.tempPolymorphicOjbect;
-                        }
-                        else
-                        {
-                            this.attr(name, {id: id, type: this[typeName]});
-                        }
-                    }
-                } else if (!polymorphic && idsDifferent) {
+                if (!this[name] || this[name].id != id) {
                     this.attr(name, id);
                 }
 
                 return this[idName];
             };
 
-            if (polymorphic && !this.prototype["set"+cap+"Type"]) {
-                this.prototype["set"+cap+"Type"] = function(polyType) {
-                    var typeName = name+"_type";
-                    var idName = name+"_id";
-                    if (this[typeName] === polyType) return polyType;
-                    if (polyType && typeof this[typeName]  !== "undefined" && !this._assocData.polyIgnoreType) throw "Should not use type for polymorphic relationship";
-                    delete this._assocData.polyIgnoreType;
-
-                    polyType = polyType ? can.classize(polyType) : polyType;
-                    this[typeName] = polyType;
-
-                    var idsDifferent = !this[name] || this[name].id != this[idName];
-
-                    if (this[idName] && (idsDifferent || this[name].constructor.shortName !== polyType)) {
-                        if ((polyType && isId(this[idName])) || (!polyType && !isId(this[idName])))
-                        {
-                            if (this._assocData.tempPolymorphicOjbect)
-                            {
-                                this.attr(name, this._assocData.tempPolymorphicOjbect);
-                                delete this._assocData.tempPolymorphicOjbect;
-                            }
-                            else
-                            {
-                                this.attr(name, {id: this[idName], type: polyType});
-                            }
-                        }
-                    }
-
-                    return this[typeName];
-
-                }
-            }
-
             return name;
         },
 
         hasMany: function(association, hasAndBelongsToMany){
             var type = association.type,
-                polyClass = (association.as) ? getPolymorphicClass(association.as) : null,
                 name = association.name || can.pluralize(can.underscore( type.match(/\w+$/)[0] )),
                 inverseName,
                 clazz;
 
             if (typeof association.inverseName == "undefined") {
-                var singular = polyClass ? polyClass._shortName : this._shortName;
-                inverseName = hasAndBelongsToMany ? can.pluralize(singular) : singular;
+                inverseName = hasAndBelongsToMany ? can.pluralize(this._shortName) : this._shortName;
             } else {
                 inverseName = association.inverseName;
             }
@@ -279,7 +176,7 @@ steal(
                 // If its initing and the list already exists, that means the children models already created it
                 if (!this._init || !this[name]) {
                     if (!this[name]) {
-                        var list = new List(this, clazz, name, inverseName, hasAndBelongsToMany, polyClass);
+                        var list = new List(this, clazz, name, inverseName, hasAndBelongsToMany);
                         if (oldSet) oldSet.call(this, list);
                         else this[name] = list;
                     }
@@ -292,7 +189,7 @@ steal(
 
             var oldGet = this.prototype["get"+cap];
             this.prototype["get"+cap] = function(){
-                if (!this[name]) this.attr(name, new List(this, clazz, name, inverseName, hasAndBelongsToMany, polyClass));
+                if (!this[name]) this.attr(name, new List(this, clazz, name, inverseName, hasAndBelongsToMany));
                 return oldGet ? oldGet.call(this, this[name]) : this[name];
             };
 

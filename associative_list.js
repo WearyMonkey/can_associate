@@ -27,7 +27,8 @@ steal(
     },
     {
         setup: function(ownerModel, containedClass, name, inverseName, hasAndBelongsToMany) {
-            var args = Array.prototype.slice.call(arguments, 6);
+            var self = this,
+                args = Array.prototype.slice.call(arguments, 6);
             can.Observe.List.prototype.setup.apply(this, args);
 
             this.containedClass = containedClass;
@@ -35,7 +36,6 @@ steal(
 
             this.addRelationShip = function(newItem) {
                 if (!inverseName) return;
-                var self = this;
                 if (ownerModel.isNew()) {
                     ownerModel.bind("created."+newItem._namespace, function() { self.addRelationShip(newItem) });
                 }
@@ -63,7 +63,6 @@ steal(
                 }
             };
 
-            var self = this;
             this.bind('change', function(ev, how) {
                 if (/\w+\.destroyed/.test(how)) {
                     self.remove(ev.target);
