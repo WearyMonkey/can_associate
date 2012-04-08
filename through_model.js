@@ -2,10 +2,6 @@ steal(
     './associative_model'
 ).then(function() {
 
-    function isId(id) {
-        return typeof id == 'string' || typeof id == 'number';
-    }
-
     var classNames = {};
 
     var associativeModelSetup = can.Model.AssociativeModel.setup;
@@ -98,7 +94,7 @@ steal(
                 delete sourceInstance._assocData["refs."+nameSpace][throughInstance._namespace];
                 for (var notEmpty in sourceInstance._assocData["refs."+nameSpace]) {break;}
                 if (!notEmpty) {
-                    delete sourceInstance._assocData["refs."+nameSpace]
+                    delete sourceInstance._assocData["refs."+nameSpace];
                     self[name].remove(sourceInstance)
                 }
             }

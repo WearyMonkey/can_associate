@@ -3,13 +3,12 @@ steal(
 ).then(function() {
 
     function getArgs(args) {
-        if (args[0] && ( $.isArray(args[0])  )) {
-            return args[0]
-        } else if (args[0] instanceof $.Model.List) {
-            return $.makeArray(args[0])
-        }
-        else {
-            return $.makeArray(args)
+        if (args[0] && can.isArray(args[0])) {
+            return args[0];
+        } else if (args[0] && typeof args[0].length != "undefined") {
+            return $.makeArray(args[0]);
+        } else {
+            return $.makeArray(args);
         }
     }
 
@@ -76,7 +75,7 @@ steal(
                 i;
 
             for (i = 0; i < args.length; i++) {
-                var model = getModel(this, args[i]),
+                var model = args[i] = getModel(this, args[i]),
                     namespace = model._namespace;
 
                 if (this.namespaceToIndex[namespace] >= 0) {
@@ -90,8 +89,14 @@ steal(
             if (args.length) {
                 can.Model.List.prototype.push.apply(this, args);
             }
+
+            return this.length;
         },
 
+        /**
+                * @function remove the models from the association list
+                * @params the models to remove from the list
+                */
         remove: function() {
             if (!this.length) {
                 return [];
@@ -128,6 +133,9 @@ steal(
             return ret;
         },
 
+        /**
+                * @function remove all the models from the association list
+                */
         removeAll: function() {
             var list = splice.call(this, 0, this.length);
 
@@ -142,6 +150,12 @@ steal(
             return ret;
         },
 
+        /**
+                * @function Replaces the contents of the list with model arguments. Does not remove (fire events)
+                * models in common. If the added models are the same as the models already contained in the list
+                * no events are fired.
+                * @params the models to the list will only contain
+                */
         replace: function() {
             // check for the already empty case
             if (this.length == 0) {
@@ -175,20 +189,14 @@ steal(
             return this.push(toAdd);
         },
 
+        /**
+                 * @function find the index of the given model or id.
+                 * @param a and model or id of a model to find index of
+                 */
         indexOf: function(a) {
             var model = getModel(this, a);
 
             return this.namespaceToIndex[model._namespace];
-        },
-
-        getIds: function() {
-            var ids = [];
-            for (var i = 0; i < this.length; ++i) {
-                var model = this[i];
-                var id = model[model.constructor.id];
-                if (id) ids.push(id);
-            }
-            return ids;
         }
     });
 

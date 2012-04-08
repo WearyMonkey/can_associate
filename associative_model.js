@@ -29,8 +29,8 @@ steal(
         },
 
         belongsTo: function(association){
-            var type = association.type,
-                name = association.name || can.underscore( type.match(/\w+$/)[0] ),
+            var inverseType = association.type,
+                name = association.name || can.underscore( inverseType.match(/\w+$/)[0] ),
                 inverseName = typeof association.inverseName == "undefined" ? can.pluralize(this._shortName) : association.inverseName,
                 cap = can.classize(name),
                 oldSet = this.prototype["set"+cap],
@@ -42,16 +42,16 @@ steal(
                 var self = this,
                     oldItem = this[name],
                     oldId = this[idName],
-                    clazz,
+                    inverseClass,
                     newItem = null;
 
 
                 if (v instanceof can.Model) {
-                    clazz = v.constructor;
+                    inverseClass = v.constructor;
                     newItem = v;
                 } else {
-                    clazz = can.getObject(type);
-                    newItem = v ? clazz.model(v) : v;
+                    inverseClass = can.getObject(inverseType);
+                    newItem = v ? inverseClass.model(v) : v;
                 }
 
 
@@ -76,10 +76,11 @@ steal(
                     if (newItem) {
                         if (!newItem[inverseName]) newItem.attr(inverseName, new List(newItem, this.constructor, inverseName, name, false, null));
 
-                        // only propogate association if this model is created
+                        // only inverse association if this model is created
                         if (!this.isNew()) {
                             newItem[inverseName].push(this);
                         } else {
+                            // wait until created before setting the inverse
                             this.constructor.bind("created.belongsTo_"+newItem._namespace, function(event, createdItem) {
                                 if (createdItem == self) {
                                     self.constructor.unbind("created.belongsTo_"+newItem._namespace);
@@ -88,10 +89,10 @@ steal(
                             });
                         }
 
-                        // when the item is destoryed remove it from the association
-                        clazz.bind("destroyed.belongsTo_"+this._namespace, function(event, destroyedItem) {
+                        // when the item is destroyed remove it from the association
+                        inverseClass.bind("destroyed.belongsTo_"+this._namespace, function(event, destroyedItem) {
                             if (destroyedItem == newItem) {
-                                clazz.unbind("destroyed.belongsTo_"+self._namespace);
+                                inverseClass.unbind("destroyed.belongsTo_"+self._namespace);
                                 self["set"+cap](null);
                             }
                         });
@@ -100,8 +101,8 @@ steal(
 
                 // if v is just and ID, then we should listen for a creation
                 if (!newItem && isId(v)) {
-                    clazz.bind("created."+this._namespace, function(event, newItem) {
-                        clazz.unbind("created."+self._namespace);
+                    inverseClass.bind("created."+this._namespace, function(event, newItem) {
+                        inverseClass.unbind("created."+self._namespace);
                         if (newItem.id == v) self["set"+cap](newItem);
                     });
                 }
@@ -116,6 +117,7 @@ steal(
                 if (oldSetId) oldSetId.call(this, id);
                 else this[idName] = id;
 
+                // if the id does not match the stored belongsTo, then forward id to belongsTo attr
                 if (!this[name] || this[name].id != id) {
                     this.attr(name, id);
                 }
@@ -127,46 +129,31 @@ steal(
         },
 
         hasMany: function(association, hasAndBelongsToMany){
-            var type = association.type,
-                name = association.name || can.pluralize(can.underscore( type.match(/\w+$/)[0] )),
-                inverseName,
-                clazz;
+            var inverseType = association.type,
+                name = association.name || can.pluralize(can.underscore( inverseType.match(/\w+$/)[0] )),
+                cap = can.classize(name),
+                oldSet =  this.prototype["set"+cap],
+                inverseClass,
+                inverseName = typeof association.inverseName == "undefined" ?
+                    hasAndBelongsToMany ? can.pluralize(this._shortName) : this._shortName :
+                    association.inverseName;
 
-            if (typeof association.inverseName == "undefined") {
-                inverseName = hasAndBelongsToMany ? can.pluralize(this._shortName) : this._shortName;
-            } else {
-                inverseName = association.inverseName;
-            }
 
-            var cap = can.classize(name);
-
-            var oldSet =  this.prototype["set"+cap];
             this.prototype["set"+cap] = function(newItems) {
-                clazz = clazz || can.getObject(type);
-                newItems = $.makeArray(newItems);
-                var newModels = [];
-                for (var i = 0; i < newItems.length; i++) {
-                    newModels.push(newItems[i] instanceof can.Model ? newItems[i] : clazz.model(newItems[i]));
-                }
+                inverseClass = inverseClass || can.getObject(inverseType);
 
                 // If its initing and the list already exists, that means the children models already created it
                 if (!this._init || !this[name]) {
                     if (!this[name]) {
-                        var list = new List(this, clazz, name, inverseName, hasAndBelongsToMany);
+                        var list = new List(this, inverseClass, name, inverseName, hasAndBelongsToMany);
                         if (oldSet) oldSet.call(this, list);
                         else this[name] = list;
                     }
-                    this[name].replace(newModels);
+                    this[name].replace(newItems);
                     return this[name];
                 } else {
                     return oldSet ? oldSet.call(this, this[name]) : this[name];
                 }
-            };
-
-            var oldGet = this.prototype["get"+cap];
-            this.prototype["get"+cap] = function(){
-                if (!this[name]) this.attr(name, new List(this, clazz, name, inverseName, hasAndBelongsToMany));
-                return oldGet ? oldGet.call(this, this[name]) : this[name];
             };
 
             return name;
