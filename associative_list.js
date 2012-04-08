@@ -14,7 +14,7 @@ steal(
     }
 
     function getModel(self, a) {
-        if (a.constructor) return a;
+        if (a instanceof can.Model) return a;
         return self.containedClass.model(a);
     }
 

@@ -10,12 +10,6 @@ steal(
         return typeof id == 'string' || typeof id == 'number';
     }
 
-    function getModel(a, clazz) {
-        if (a instanceof clazz) return a;
-        else if (isId(a)) return clazz.store[a];
-        else return clazz.model(a);
-    }
-
     function associate(associations, Class, type) {
         var relations = $.makeArray( associations[type]);
         associations[type] = relations;
@@ -24,9 +18,6 @@ steal(
             if (typeof relations[i] !== 'object') {
                 var name = Class[type]({ type: relations[i] });
                 relations[i] = {type: relations[i], name: name};
-            } else if (relations[i].via) {
-                name = Class.via(relations[i]);
-                relations[i].name = name;
             } else {
                 name = Class[type](relations[i]);
                 relations[i].name = name;
@@ -41,12 +32,17 @@ steal(
         setup: function( superClass , stat, proto) {
             if (this == can.Model.AssociativeModel) return;
             can.Model.setup.apply(this, arguments);
-            //this._super(superClass, stat, proto);
             if (this.associations) {
                 associate(this.associations, this, "hasMany");
                 associate(this.associations, this, "belongsTo");
                 associate(this.associations, this, "hasAndBelongsToMany");
             }
+        },
+
+        model: function(obj) {
+            if (obj instanceof this) return obj;
+            else if (isId(obj)) return this.store[obj];
+            else return can.Model.model.apply(this, arguments);
         },
 
         belongsTo: function(association){
@@ -68,7 +64,7 @@ steal(
                         newItem = v;
                     } else {
                         clazz = can.getObject(type);
-                        newItem = v ? getModel(v, clazz) : v;
+                        newItem = v ? clazz.model(v) : v;
                     }
 
 
@@ -170,7 +166,7 @@ steal(
                 newItems = $.makeArray(newItems);
                 var newModels = [];
                 for (var i = 0; i < newItems.length; i++) {
-                    newModels.push(newItems[i] instanceof can.Model ? newItems[i] : getModel(newItems[i], can.getObject(type)));
+                    newModels.push(newItems[i] instanceof can.Model ? newItems[i] : clazz.model(newItems[i]));
                 }
 
                 // If its initing and the list already exists, that means the children models already created it
@@ -194,93 +190,6 @@ steal(
             };
 
             return name;
-        },
-
-        via: function(association) {
-            var type = association.type;
-            var name = association.name || can.pluralize(can.underscore( type.match(/\w+$/)[0] ));
-            var clazz;
-            var via = association.via;
-            var source = association.source || can.singularize(name);
-            var setName = "set" + can.classize(via);
-
-            var orgSet = this.prototype[setName];
-            this.prototype[setName] = function(list) {
-                var self = this;
-                var nameSpace = via+"_via_"+this._namespace;
-                clazz = clazz || can.getObject(type);
-
-                var oldList = this[via];
-
-                list = this[via] = orgSet ? orgSet.call(this, list) : list;
-
-                if (oldList != list) {
-                    if (oldList) removeVias(self, nameSpace, oldList);
-                    addVias(self, nameSpace, list);
-                    list.bind("add."+nameSpace, function(ev, vias) {
-                        addVias(self, nameSpace, vias);
-                    });
-                    list.bind("remove."+nameSpace, function(ev, vias) {
-                        removeVias(self, nameSpace, vias);
-                    });
-                }
-
-                return list;
-            };
-
-            association.inverseName = null;
-
-            this.hasMany(association, false);
-
-            return name;
-
-            function addVias(self, nameSpace, vias) {
-                for (var i = 0; i < vias.length; ++i) {
-                    (function(via) {
-                        var oldSource = via[source];
-                        via.bind(source+"." + nameSpace, function(ev, newSource) {
-                            removeSource(self, nameSpace, via, oldSource);
-                            addSource(self, nameSpace, via, newSource);
-                            oldSource = newSource;
-                        });
-                    })(vias[i]);
-
-                    addSource(self, nameSpace, vias[i], vias[i][source]);
-
-                }
-            }
-
-            function removeVias(self, nameSpace, vias) {
-                for (var i = 0; i < vias.length; ++i) {
-                    vias[i].unbind(source+"." + nameSpace);
-                    removeSource(self, nameSpace, vias[i], vias[i][source]);
-                }
-            }
-
-            function addSource(self, nameSpace, viaInstance, sourceInstance) {
-                if (!sourceInstance) return;
-
-                if (typeof sourceInstance._assocData["refs."+nameSpace] == "undefined") {
-                    sourceInstance._assocData["refs."+nameSpace] = {};
-                    if (!self[name]) self.attr(name, new List(this, clazz, name));
-                    self[name].push(getModel(sourceInstance, clazz));
-                }
-                sourceInstance._assocData["refs."+nameSpace][viaInstance._namespace] = true;
-            }
-
-            function removeSource(self, nameSpace, viaInstance, sourceInstance) {
-                if (!sourceInstance) return;
-
-                if (sourceInstance._assocData["refs."+nameSpace] && sourceInstance._assocData["refs."+nameSpace][viaInstance._namespace]) {
-                    delete sourceInstance._assocData["refs."+nameSpace][viaInstance._namespace];
-                    for (var notEmpty in sourceInstance._assocData["refs."+nameSpace]) {break;}
-                    if (!notEmpty) {
-                        delete sourceInstance._assocData["refs."+nameSpace]
-                        self[name].remove(sourceInstance)
-                    }
-                }
-
-            }
         },
 
         hasAndBelongsToMany: function(association)

@@ -1,6 +1,7 @@
 steal(
     "can/assoc/associative_model.js",
-    "can/assoc/polymorphic_model.js"
+    "can/assoc/polymorphic_model.js",
+    "can/assoc/through_model.js"
 ).then(
     "can/util/deferred.js"
 ).then(function() {
@@ -42,7 +43,7 @@ steal(
                 associations : {
                     hasMany : [
                         "BModel",
-                        {type: "XModel", via: "b_models"}
+                        {type: "XModel", through: "b_models"}
                     ]
                 }
             },
@@ -713,7 +714,7 @@ steal(
             expect($.makeArray(removeSpy.argsForCall[2][1])).toEqual([b1, b2, b3]);
         });
 
-        it("associates via models when created", function() {
+        it("associates through models when created", function() {
             var x = new XModel();
             var b = new BModel({x_model: x});
             var a = new AModel({b_models: [b]});
@@ -721,7 +722,7 @@ steal(
             expect($.makeArray(a.x_models)).toEqual([x]);
         });
 
-        it("associates via models does not contain duplicates", function() {
+        it("associates through models does not contain duplicates", function() {
             var x1 = new XModel();
             var x2 = new XModel();
             var b1 = new BModel({x_model: x1});
