@@ -10,33 +10,16 @@ steal(
         return typeof id == 'string' || typeof id == 'number';
     }
 
-    function associate(associations, Class, type) {
-        var relations = $.makeArray( associations[type]);
-        associations[type] = relations;
-        for(var i=0; i < relations.length;i++) {
-
-            if (typeof relations[i] !== 'object') {
-                var name = Class[type]({ type: relations[i] });
-                relations[i] = {type: relations[i], name: name};
-            } else {
-                name = Class[type](relations[i]);
-                relations[i].name = name;
-            }
-        }
-        return relations;
-    }
-
     can.Model('can.Model.AssociativeModel',
     /* @Static */
     {
         setup: function( superClass , stat, proto) {
             if (this == can.Model.AssociativeModel) return;
             can.Model.setup.apply(this, arguments);
-            if (this.associations) {
-                associate(this.associations, this, "hasMany");
-                associate(this.associations, this, "belongsTo");
-                associate(this.associations, this, "hasAndBelongsToMany");
-            }
+            var self = this;
+            can.forEachAssociation(this.associations, function(assocType, association) {
+                association.name = self[assocType](association);
+            });
         },
 
         model: function(obj) {
@@ -50,90 +33,87 @@ steal(
                 name = association.name || can.underscore( type.match(/\w+$/)[0] ),
                 inverseName = typeof association.inverseName == "undefined" ? can.pluralize(this._shortName) : association.inverseName,
                 cap = can.classize(name),
+                oldSet = this.prototype["set"+cap],
+                oldSetId = this.prototype["set"+cap+"Id"],
+                idName = name+"_id";
 
-                set = function(v) {
+            this.prototype["set"+cap] = function(v) {
 
-                    var self = this,
-                        oldItem = this[name],
-                        clazz,
-                        newItem = null;
+                var self = this,
+                    oldItem = this[name],
+                    oldId = this[idName],
+                    clazz,
+                    newItem = null;
 
 
-                    if (v instanceof can.Model) {
-                        clazz = v.constructor;
-                        newItem = v;
-                    } else {
-                        clazz = can.getObject(type);
-                        newItem = v ? clazz.model(v) : v;
+                if (v instanceof can.Model) {
+                    clazz = v.constructor;
+                    newItem = v;
+                } else {
+                    clazz = can.getObject(type);
+                    newItem = v ? clazz.model(v) : v;
+                }
+
+
+                if (oldSet) oldSet.call(this, newItem);
+                else this[name] = newItem;
+
+                // if newItem is null or undefined, than the id should be the same, e.g. story => undefined story_id => undefined
+                var newId = isId(v) ? v : newItem ? newItem[newItem.constructor.id] : newItem;
+                if (typeof oldId == "undefined" || oldId != newId) {
+                    this.attr(idName, newId);
+                }
+
+                if (inverseName) {
+                    // remove this from the old item inverse relationship
+                    if (oldItem && (!newItem || oldItem.id != newItem.id) && oldItem[inverseName]) {
+                        oldItem[inverseName].remove(this);
+                        oldItem.constructor.unbind("destroyed.belongsTo_"+this._namespace);
+                        this.constructor.unbind("created.belongsTo_"+oldItem._namespace);
                     }
 
+                    // add this to the new items inverse relationship
+                    if (newItem) {
+                        if (!newItem[inverseName]) newItem.attr(inverseName, new List(newItem, this.constructor, inverseName, name, false, null));
 
-                    if (orgSet) orgSet.call(this, newItem);
-                    else this[name] = newItem;
-
-                    var idName = name+"_id";
-                    var oldId = this[idName];
-                    // if newItem is null or undefined, than the id should be the same, e.g. story => undefined story_id => undefined
-                    var newId = isId(v) ? v : newItem ? newItem[newItem.constructor.id] : newItem;
-                    if (typeof oldId == "undefined" || oldId != newId) {
-                        this.attr(idName, newId);
-                    }
-
-                    if (inverseName) {
-                        // remove this from the old item inverse relationship
-                        if (oldItem && (!newItem || oldItem.id != newItem.id) && oldItem[inverseName]) {
-                            oldItem[inverseName].remove(this);
-                            oldItem.constructor.unbind("destroyed.belongsTo_"+this._namespace);
-                            this.constructor.bind("created.belongsTo_"+oldItem._namespace);
-                        }
-
-                        // add this to the new items inverse relationship
-                        if (newItem) {
-                            if (!newItem[inverseName]) newItem.attr(inverseName, new List(newItem, this.constructor, inverseName, name, false, null));
-                            if (!this.isNew()) {
-                                newItem[inverseName].push(this);
-                            } else {
-                                this.constructor.bind("created.belongsTo_"+newItem._namespace, function(event, createdItem) {
-                                    if (createdItem == self) {
-                                        self.constructor.unbind("created.belongsTo_"+newItem._namespace);
-                                        newItem[inverseName].push(self);
-                                    }
-                                });
-                            }
-                            clazz.bind("destroyed.belongsTo_"+this._namespace, function(event, destroyedItem) {
-                                if (destroyedItem == newItem) {
-                                    clazz.unbind("destroyed.belongsTo_"+self._namespace);
-                                    set.call(self, null);
+                        // only propogate association if this model is created
+                        if (!this.isNew()) {
+                            newItem[inverseName].push(this);
+                        } else {
+                            this.constructor.bind("created.belongsTo_"+newItem._namespace, function(event, createdItem) {
+                                if (createdItem == self) {
+                                    self.constructor.unbind("created.belongsTo_"+newItem._namespace);
+                                    newItem[inverseName].push(self);
                                 }
                             });
                         }
-                    }
 
-                    // clean up the handle if it was created before
-                    if (this[name+"_handle"]) {
-                        clazz.unbind("created."+this._namespace);
-                        delete this[name+"_handle"];
-                    }
-
-                    // if v is just and ID, then we should listen for a creation
-                    if (!newItem && isId(v)) {
-                        clazz.bind("created."+this._namespace, function(event, newItem) {
-                            if (newItem.id == v) set.call(self, newItem);
+                        // when the item is destoryed remove it from the association
+                        clazz.bind("destroyed.belongsTo_"+this._namespace, function(event, destroyedItem) {
+                            if (destroyedItem == newItem) {
+                                clazz.unbind("destroyed.belongsTo_"+self._namespace);
+                                self["set"+cap](null);
+                            }
                         });
                     }
+                }
 
-                    return newItem;
-                },
-                orgSet = this.prototype["set"+cap],
-                orgSetId = this.prototype["set"+cap+"Id"];
+                // if v is just and ID, then we should listen for a creation
+                if (!newItem && isId(v)) {
+                    clazz.bind("created."+this._namespace, function(event, newItem) {
+                        clazz.unbind("created."+self._namespace);
+                        if (newItem.id == v) self["set"+cap](newItem);
+                    });
+                }
 
-            this.prototype["set"+cap] = set;
+                return newItem;
+            };
 
             this.prototype["set"+cap+"Id"] = function(id) {
                 var idName = name+"_id";
                 if (this[idName] === id) return id;
 
-                if (orgSetId) orgSetId.call(this, id);
+                if (oldSetId) oldSetId.call(this, id);
                 else this[idName] = id;
 
                 if (!this[name] || this[name].id != id) {

@@ -15,18 +15,12 @@ steal(
 
         classNames[this.shortName] = this;
 
-        if (this.associations) {
-            for (var type in this.associations) {
-                for (var i = 0; i < this.associations[type].length; ++i) {
-                    var association = this.associations[type][i];
-                    if (association.through && type == "hasMany") {
-                        hasMany(this, association)
-                    } else if (association.as && type == "hasMany") {
-
-                    }
-                }
+        var self = this;
+        can.forEachAssociation(this.associations, function(assocType, association) {
+            if (association.through && assocType == "hasMany") {
+                hasMany(self, association)
             }
-        }
+        });
     };
 
     function hasMany(self, association) {

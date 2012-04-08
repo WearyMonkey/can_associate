@@ -40,5 +40,20 @@ steal(
         }
 
         return parts.join(join || '');
+    },
+
+    can.forEachAssociation = function(associations, callback) {
+        if (associations) {
+            for (var assocType in associations) {
+                associations[assocType] = can.makeArray(associations[assocType]);
+                for (var i = 0; i < associations[assocType].length; ++i) {
+                    var association = associations[assocType][i];
+                    if (typeof association != 'object') {
+                        association = associations[assocType][i] = {type: association}
+                    }
+                    callback(assocType, association);
+                }
+            }
+        }
     }
 });
