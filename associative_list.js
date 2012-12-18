@@ -36,7 +36,7 @@ steal(
             this.addRelationShip = function(newItem) {
                 if (!inverseName) return;
                 if (ownerModel.isNew()) {
-                    ownerModel.bind("created."+newItem._namespace, function() { self.addRelationShip(newItem) });
+                    ownerModel.bind("created."+newItem._cid, function() { self.addRelationShip(newItem) });
                 }
                 else if (hasAndBelongsToMany) {
                     if (!newItem[inverseName]) {
@@ -52,7 +52,7 @@ steal(
 
             this.removeRelationShip = function(oldItem) {
                 if (!inverseName) return;
-                ownerModel.unbind("created."+oldItem._namespace);
+                ownerModel.unbind("created."+oldItem._cid);
                 if (hasAndBelongsToMany) {
                     if (oldItem[inverseName]) oldItem[inverseName].remove(ownerModel);
                 } else {
@@ -76,7 +76,7 @@ steal(
 
             for (i = 0; i < args.length; i++) {
                 var model = args[i] = getModel(this, args[i]),
-                    namespace = model._namespace;
+                    namespace = model._cid;
 
                 if (this.namespaceToIndex[namespace] >= 0) {
                     args.splice(i, 1);
@@ -114,12 +114,12 @@ steal(
                 } else if (index < this.length - 1) {
                     found = this[index];
                     this[index] = pop.call(this);
-                    this.namespaceToIndex[this[index]._namespace] = index;
+                    this.namespaceToIndex[this[index]._cid] = index;
                 }
 
                 if (found) {
                     this._changed = true;
-                    delete this.namespaceToIndex[found._namespace];
+                    delete this.namespaceToIndex[found._cid];
                     this.removeRelationShip(found);
                     list.push(found);
                 }
@@ -173,8 +173,8 @@ steal(
 
             for (var i = 0; i < args.length; i++) {
                 var model = getModel(this, args[i]);
-                if (toRemoveModels[model._namespace] >= 0) {
-                    delete toRemoveModels[model._namespace];
+                if (toRemoveModels[model._cid] >= 0) {
+                    delete toRemoveModels[model._cid];
                 } else {
                     toAdd.push(model)
                 }
@@ -196,7 +196,7 @@ steal(
         indexOf: function(a) {
             var model = getModel(this, a);
 
-            return this.namespaceToIndex[model._namespace];
+            return this.namespaceToIndex[model._cid];
         }
     });
 

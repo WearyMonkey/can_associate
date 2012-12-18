@@ -30,7 +30,7 @@ steal(
 
         self.prototype[("set" + cap)] = function(list) {
             var self = this,
-                nameSpace = throughName+"_through_"+this._namespace,
+                nameSpace = throughName+"_through_"+this._cid,
                 oldList = this[throughName];
 
             clazz = clazz || can.getObject(type);
@@ -84,14 +84,14 @@ steal(
                 if (!self[name]) self.attr(name, new can.Model.AssociativeList(this, clazz, name));
                 self[name].push(clazz.model(sourceInstance));
             }
-            sourceInstance._assocData["refs."+nameSpace][throughInstance._namespace] = true;
+            sourceInstance._assocData["refs."+nameSpace][throughInstance._cid] = true;
         }
 
         function removeSource(self, nameSpace, throughInstance, sourceInstance) {
             if (!sourceInstance) return;
 
-            if (sourceInstance._assocData["refs."+nameSpace] && sourceInstance._assocData["refs."+nameSpace][throughInstance._namespace]) {
-                delete sourceInstance._assocData["refs."+nameSpace][throughInstance._namespace];
+            if (sourceInstance._assocData["refs."+nameSpace] && sourceInstance._assocData["refs."+nameSpace][throughInstance._cid]) {
+                delete sourceInstance._assocData["refs."+nameSpace][throughInstance._cid];
                 for (var notEmpty in sourceInstance._assocData["refs."+nameSpace]) {break;}
                 if (!notEmpty) {
                     delete sourceInstance._assocData["refs."+nameSpace];

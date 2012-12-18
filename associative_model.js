@@ -68,8 +68,8 @@ steal(
                     // remove this from the old item inverse relationship
                     if (oldItem && (!newItem || oldItem.id != newItem.id) && oldItem[inverseName]) {
                         oldItem[inverseName].remove(this);
-                        oldItem.constructor.unbind("destroyed.belongsTo_"+this._namespace);
-                        this.constructor.unbind("created.belongsTo_"+oldItem._namespace);
+                        oldItem.constructor.unbind("destroyed.belongsTo_"+this._cid);
+                        this.constructor.unbind("created.belongsTo_"+oldItem._cid);
                     }
 
                     // add this to the new items inverse relationship
@@ -81,18 +81,18 @@ steal(
                             newItem[inverseName].push(this);
                         } else {
                             // wait until created before setting the inverse
-                            this.constructor.bind("created.belongsTo_"+newItem._namespace, function(event, createdItem) {
+                            this.constructor.bind("created.belongsTo_"+newItem._cid, function(event, createdItem) {
                                 if (createdItem == self) {
-                                    self.constructor.unbind("created.belongsTo_"+newItem._namespace);
+                                    self.constructor.unbind("created.belongsTo_"+newItem._cid);
                                     newItem[inverseName].push(self);
                                 }
                             });
                         }
 
                         // when the item is destroyed remove it from the association
-                        inverseClass.bind("destroyed.belongsTo_"+this._namespace, function(event, destroyedItem) {
+                        inverseClass.bind("destroyed.belongsTo_"+this._cid, function(event, destroyedItem) {
                             if (destroyedItem == newItem) {
-                                inverseClass.unbind("destroyed.belongsTo_"+self._namespace);
+                                inverseClass.unbind("destroyed.belongsTo_"+self._cid);
                                 self["set"+cap](null);
                             }
                         });
@@ -101,8 +101,8 @@ steal(
 
                 // if v is just and ID, then we should listen for a creation
                 if (!newItem && isId(v)) {
-                    inverseClass.bind("created."+this._namespace, function(event, newItem) {
-                        inverseClass.unbind("created."+self._namespace);
+                    inverseClass.bind("created."+this._cid, function(event, newItem) {
+                        inverseClass.unbind("created."+self._cid);
                         if (newItem.id == v) self["set"+cap](newItem);
                     });
                 }
