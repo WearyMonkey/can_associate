@@ -1,8 +1,7 @@
 steal(
     'can/observe'
 ).then(function() {
-    can.pluralize = function(str)
-    {
+    can.pluralize = function(str) {
         var ch = str[str.length-1];
         if (ch == 's')
         {
@@ -40,7 +39,11 @@ steal(
         }
 
         return parts.join(join || '');
-    },
+    };
+
+    can.isId = function(id) {
+        return typeof id == 'string' || typeof id == 'number';
+    };
 
     can.forEachAssociation = function(associations, callback) {
         if (associations) {

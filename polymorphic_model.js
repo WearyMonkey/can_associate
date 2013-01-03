@@ -2,16 +2,11 @@ steal(
     './associative_model'
 ).then(function() {
 
-    function isId(id) {
-        return typeof id == 'string' || typeof id == 'number';
-    }
+    var classNames = {},
+        orgClassSetup = can.Model.setup;
 
-    var classNames = {};
-
-    var associativeModelSetup = can.Model.AssociativeModel.setup;
-    can.Model.AssociativeModel.setup = function() {
-        associativeModelSetup.apply(this, arguments);
-        if (this == can.Model.AssociativeModel) return;
+    can.Model.setup = function() {
+        orgClassSetup.apply(this, arguments);
 
         classNames[this.shortName] = this;
 
@@ -33,7 +28,7 @@ steal(
 
 
         self.prototype["set"+cap] = function(v) {
-            if (isId(v)) throw "Can not use id for polymorphic relationship";
+            if (can.isId(v)) throw "Can not use id for polymorphic relationship";
 
             var newItem = null;
 
@@ -45,7 +40,7 @@ steal(
                     if (!newItem) return null; // there's chance that the polymorphic object is supplied by the server, but
                     // attr() for that object has not been called yet, so return here to avoid resetting the type and id
                 } else if (this[name+"_type"]) {
-                    newItem = classNames[this[name+"_type"]].model(v);
+                    newItem = can.getModel(classNames[this[name+"_type"]], v);
                 }
                 else // attr(polyobj) has been called before attr(polyobj_type), so we store the poly object in the local.
                 // when attr(polyobj_type) is called, it will use this object instead of {type, id}
@@ -74,13 +69,13 @@ steal(
 
         self.prototype["set"+cap+"Id"] = function(id) {
             if (this[idName] === id) return id;
-            if (isId(id) && isId(this[idName]) && !this._assocData.polyIgnoreId) throw "Should not use id for polymorphic relationship";
+            if (can.isId(id) && can.isId(this[idName]) && !this._assocData.polyIgnoreId) throw "Should not use id for polymorphic relationship";
 
             this[idName] = id;
 
             var idsDifferent = !this[name] || this[name].id != id;
             if (this[typeName] && (idsDifferent || this[name].constructor.shortName !== this[typeName])) {
-                if ((isId(id) && this[typeName]) || (!isId(id) && !this[typeName])) {
+                if ((can.isId(id) && this[typeName]) || (!can.isId(id) && !this[typeName])) {
                     if (this._assocData.tempPolymorphicOjbect) {
                         this.attr(name, this._assocData.tempPolymorphicOjbect);
                         delete this._assocData.tempPolymorphicOjbect;
@@ -106,7 +101,7 @@ steal(
             var idsDifferent = !this[name] || this[name].id != this[idName];
 
             if (this[idName] && (idsDifferent || this[name].constructor.shortName !== polyType)) {
-                if ((polyType && isId(this[idName])) || (!polyType && !isId(this[idName])))
+                if ((polyType && can.isId(this[idName])) || (!polyType && !can.isId(this[idName])))
                 {
                     if (this._assocData.tempPolymorphicOjbect)
                     {

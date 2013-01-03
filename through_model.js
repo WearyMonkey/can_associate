@@ -2,12 +2,12 @@ steal(
     './associative_model'
 ).then(function() {
 
-    var classNames = {};
-
-    var associativeModelSetup = can.Model.AssociativeModel.setup;
-    can.Model.AssociativeModel.setup = function() {
-        associativeModelSetup.apply(this, arguments);
-        if (this == can.Model.AssociativeModel) return;
+    var List = can.Model.AssociativeList,
+        classNames = {},
+        orgClassSetup = can.Model.setup;
+        
+    can.Model.setup = function() {
+        orgClassSetup.apply(this, arguments);
 
         classNames[this.shortName] = this;
 
@@ -20,13 +20,13 @@ steal(
     };
 
     function hasMany(self, association) {
-        var type = association.type;
-        var name = association.name;
-        var clazz;
-        var throughName = association.through;
-        var sourceName = association.source || can.singularize(name);
-        var cap = can.classize(throughName);
-        var oldSet = self.prototype[("set" + cap)];
+        var type = association.type,
+            name = association.name,
+            clazz,
+            throughName = association.through,
+            sourceName = association.source || can.singularize(name),
+            cap = can.classize(throughName),
+            oldSet = self.prototype[("set" + cap)];
 
         self.prototype[("set" + cap)] = function(list) {
             var self = this,
@@ -58,45 +58,55 @@ steal(
                 (function(through) {
                     var oldSource = through[sourceName];
                     through.bind(sourceName+"." + nameSpace, function(ev, newSource) {
-                        removeSource(self, nameSpace, through, oldSource);
-                        addSource(self, nameSpace, through, newSource);
+                        removeSource(self, nameSpace, oldSource);
+                        addSource(self, nameSpace, newSource);
                         oldSource = newSource;
                     });
                 })(throughs[i]);
 
-                addSource(self, nameSpace, throughs[i], throughs[i][sourceName]);
-
+                addSource(self, nameSpace, throughs[i][sourceName]);
             }
         }
 
         function removeThroughs(self, nameSpace, throughs) {
             for (var i = 0; i < throughs.length; ++i) {
                 throughs[i].unbind(sourceName+"." + nameSpace);
-                removeSource(self, nameSpace, throughs[i], throughs[i][sourceName]);
+                removeSource(self, nameSpace, throughs[i][sourceName]);
             }
         }
 
-        function addSource(self, nameSpace, throughInstance, sourceInstance) {
+        function addSource(self, nameSpace, sourceInstance) {
+            var refcountName = "refCount."+nameSpace,
+                refCount;
+
             if (!sourceInstance) return;
 
-            if (typeof sourceInstance._assocData["refs."+nameSpace] == "undefined") {
-                sourceInstance._assocData["refs."+nameSpace] = {};
-                if (!self[name]) self.attr(name, new can.Model.AssociativeList(this, clazz, name));
-                self[name].push(clazz.model(sourceInstance));
+            if (typeof sourceInstance._assocData[refcountName] == "undefined") {
+                refCount = sourceInstance._assocData[refcountName] = 1;
+            } else {
+                refCount = ++sourceInstance._assocData[refcountName];
             }
-            sourceInstance._assocData["refs."+nameSpace][throughInstance._cid] = true;
-        }
 
-        function removeSource(self, nameSpace, throughInstance, sourceInstance) {
-            if (!sourceInstance) return;
-
-            if (sourceInstance._assocData["refs."+nameSpace] && sourceInstance._assocData["refs."+nameSpace][throughInstance._cid]) {
-                delete sourceInstance._assocData["refs."+nameSpace][throughInstance._cid];
-                for (var notEmpty in sourceInstance._assocData["refs."+nameSpace]) {break;}
-                if (!notEmpty) {
-                    delete sourceInstance._assocData["refs."+nameSpace];
-                    self[name].remove(sourceInstance)
+            if (refCount == 1) {
+                if (!self[name]) self.attr(name, new List(this, clazz, name));
+                var model = clazz.model(sourceInstance);
+                if (model.isNew()) {
+                    model.bind("created."+nameSpace, function() {
+                        self[name].push(model);
+                    });
+                } else {
+                    self[name].push(model);
                 }
+            }
+        }
+
+        function removeSource(self, nameSpace, sourceInstance) {
+            var refCount;
+            if (!sourceInstance) return;
+            refCount = --sourceInstance._assocData["refCount."+nameSpace];
+            if (refCount <= 0) {
+                sourceInstance.unbind("created."+nameSpace);
+                self[name].remove(sourceInstance)
             }
         }
     }
