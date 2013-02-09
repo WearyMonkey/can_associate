@@ -99,9 +99,9 @@ steal(
                 }
             }
 
-            var ret = new $.Model.List(list);
+            var ret = new can.Model.List(list);
             if (ret.length) {
-                $([this]).trigger("remove", [ret])
+                this._triggerChange("0", "remove", undefined, ret);
             }
 
             return ret;
@@ -116,9 +116,9 @@ steal(
             this.namespaceToIndex = {};
             for (var i = 0; i < list.length; i++) removeRelationShip(this, list[i]);
 
-            var ret = new $.Model.List(list);
+            var ret = new can.Model.List(list);
             if (ret.length) {
-                $([this]).trigger("remove", [ret])
+                this._triggerChange("0", "remove", undefined, ret);
             }
 
             return ret;

@@ -16,7 +16,7 @@ steal(
             orgClassSetup.apply(this, arguments);
             var self = this;
             can.forEachAssociation(this.associations, function(assocType, association) {
-                association.name = factories[assocType](self, association);
+                factories[assocType](self, association);
             });
         }
     });
@@ -34,7 +34,7 @@ steal(
         this._assocData = {};
 
         var clazzCache = tmpCache[clazzName] = tmpCache[clazzName] || {};
-        clazzCache[attributes[clazzId]] = this;
+        if (attributes && attributes[clazzId]) clazzCache[attributes[clazzId]] = this;
 
         var result = orgSetup.call(this, attributes);
 
@@ -72,12 +72,13 @@ steal(
     var factories = {
         belongsTo : function(clazz, association) {
             var inverseType = association.type,
-                name = association.name || can.underscore( inverseType.match(/\w+$/)[0] ),
-                inverseName = typeof association.inverseName == "undefined" ? can.pluralize(clazz._shortName) : association.inverseName,
+                name = association.name = association.name || can.underscore( inverseType.match(/\w+$/)[0] ),
                 cap = can.classize(name),
                 oldSet = clazz.prototype["set"+cap],
                 oldSetId = clazz.prototype["set"+cap+"Id"],
                 idName = name+"_id";
+
+            if (typeof association.inverseName == "undefined") association.inverseName = $.pluralize(clazz._shortName);
 
             clazz.prototype["set"+cap] = function(v) {
 
@@ -85,7 +86,8 @@ steal(
                     oldItem = this[name],
                     oldId = this[idName],
                     inverseClass,
-                    newItem = null;
+                    newItem = null,
+                    inverseName = association.inverseName;
 
 
                 if (v instanceof can.Model) {
@@ -166,22 +168,22 @@ steal(
 
                 return this[idName];
             };
-
-            return name;
         },
 
         hasMany: function(clazz, association, hasAndBelongsToMany) {
             var inverseType = association.type,
-                name = association.name || can.pluralize(can.underscore( inverseType.match(/\w+$/)[0] )),
+                name = association.name = association.name || can.pluralize(can.underscore( inverseType.match(/\w+$/)[0] )),
                 cap = can.classize(name),
                 oldSet =  clazz.prototype["set"+cap],
-                inverseClass,
-                inverseName = typeof association.inverseName == "undefined" ?
-                    hasAndBelongsToMany ? can.pluralize(clazz._shortName) : clazz._shortName :
-                    association.inverseName;
+                inverseClass;
 
+            if (typeof association.inverseName == "undefined") {
+                association.inverseName = hasAndBelongsToMany ? $.pluralize(clazz._shortName) : clazz._shortName;
+            }
 
             clazz.prototype["set"+cap] = function(newItems) {
+                var inverseName = association.inverseName;
+
                 inverseClass = inverseClass || can.getObject(inverseType);
 
                 var newModels = $.map(newItems, function(newItem) {
@@ -206,8 +208,6 @@ steal(
                     return this[name];
                 }
             };
-
-            return name;
         },
 
         hasAndBelongsToMany: function(clazz, association) {

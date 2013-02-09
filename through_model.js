@@ -3,15 +3,13 @@ steal(
 ).then(function() {
 
     var List = can.Model.AssociativeList,
-        classNames = {},
         orgClassSetup = can.Model.setup;
         
     can.Model.setup = function() {
+        var self = this;
+
         orgClassSetup.apply(this, arguments);
 
-        classNames[this.shortName] = this;
-
-        var self = this;
         can.forEachAssociation(this.associations, function(assocType, association) {
             if (association.through && assocType == "hasMany") {
                 hasMany(self, association)
@@ -35,7 +33,7 @@ steal(
 
             clazz = clazz || can.getObject(type);
 
-            list = this[throughName] = oldSet.call(this, list);
+            list = this[throughName] = oldSet ? oldSet.call(this, list) : list;
 
             if (oldList != list) {
                 if (oldList) removeThroughs(self, nameSpace, oldList);
@@ -51,7 +49,7 @@ steal(
             return list;
         };
 
-        return name;
+        association.inverseName = null;
 
         function addThroughs(self, nameSpace, throughs) {
             for (var i = 0; i < throughs.length; ++i) {
