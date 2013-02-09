@@ -34,12 +34,6 @@ steal(
             this.namespaceToIndex = {};
             var namespace = containedClass.fullName + ".List";
             this.constructor = lists[namespace] = lists[namespace] || can.Model.List(namespace);
-
-            this.bind('change', function(ev, how) {
-                if (/\w+\.destroyed/.test(how)) {
-                    self.remove(ev.target);
-                }
-            })
         },
 
         push: function() {
@@ -114,7 +108,9 @@ steal(
             var list = splice.call(this, 0, this.length);
 
             this.namespaceToIndex = {};
-            for (var i = 0; i < list.length; i++) removeRelationShip(this, list[i]);
+            for (var i = 0; i < list.length; i++) {
+                removeRelationShip(this, list[i]);
+            }
 
             var ret = new can.Model.List(list);
             if (ret.length) {
@@ -186,6 +182,10 @@ steal(
             ownerModel = self.ownerModel,
             hasAndBelongsToMany = self.hasAndBelongsToMany;
 
+        newItem.one("destroyed." + self._cid, function() {
+            self.remove([newItem]);
+        });
+
         if (!inverseName) return;
 
         if (ownerModel.isNew()) ownerModel.bind("created."+newItem.local.id, function() { addRelationShip(self, newItem) });
@@ -205,6 +205,8 @@ steal(
         var inverseName = self.inverseName,
             ownerModel = self.ownerModel,
             hasAndBelongsToMany = self.hasAndBelongsToMany;
+
+        oldItem.unbind("destroyed." + self._cid);
 
         if (!inverseName) return;
 
