@@ -36,20 +36,44 @@ steal(
             list = this[throughName] = oldSet ? oldSet.call(this, list) : list;
 
             if (oldList != list) {
-                if (oldList) removeThroughs(self, nameSpace, oldList);
+                if (oldList) {
+                    removeThroughs(self, nameSpace, oldList);
+                    unwrapModifiers(self, nameSpace, list);
+                }
                 addThroughs(self, nameSpace, list);
-                list.bind("add."+nameSpace, function(ev, throughs) {
-                    addThroughs(self, nameSpace, throughs);
-                });
-                list.bind("remove."+nameSpace, function(ev, throughs) {
-                    removeThroughs(self, nameSpace, throughs);
-                });
+                wrapModifiers(self, nameSpace, list);
             }
 
             return list;
         };
 
         association.inverseName = null;
+
+        function wrapModifiers(self, nameSpace, list) {
+            $.each(["remove", "push", "removeAll"], function(i, mod) {
+                var org = list[mod];
+                list[mod] = function() {
+                    this.bind("add", function(ev, vias) {
+                        addThroughs(self, nameSpace, vias);
+                    });
+                    this.bind("remove", function(ev, vias) {
+                        removeThroughs(self, nameSpace, vias);
+                    });
+                    unwrapModifiers(self, nameSpace, list);
+                    org.apply(this, arguments);
+                };
+                list[mod].orgFn = org;
+            });
+        }
+
+        function unwrapModifiers(self, nameSpace, list) {
+            $.each(["remove", "push", "removeAll"], function(i, mod) {
+                var modified = list[mod];
+                if (modified.orgFn) {
+                    list[mod] = modified.orgFn;
+                }
+            });
+        }
 
         function addThroughs(self, nameSpace, throughs) {
             for (var i = 0; i < throughs.length; ++i) {
@@ -87,7 +111,7 @@ steal(
 
             if (refCount == 1) {
                 if (!self[name]) self.attr(name, new List(this, clazz, name));
-                var model = clazz.model(sourceInstance);
+                var model = can.getModel(clazz, sourceInstance);
                 if (model.isNew()) {
                     model.bind("created."+nameSpace, function() {
                         self[name].push(model);

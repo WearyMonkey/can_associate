@@ -1,13 +1,12 @@
 steal(
-    "can/assoc/associative_model.js",
-    "can/assoc/polymorphic_model.js",
-    "can/assoc/through_model.js"
+    "../../associative_model.js",
+    "../../polymorphic_model.js",
+    "../../through_model.js"
 ).then(
     "can/util/deferred.js"
 ).then(function() {
-    describe("Can.Models.AssociativeModel", function() {
-        
-        var oldInit = null;
+    describe("R7.Models.AssociativeModel", function() {
+
         var saveIds = [];
         var autosave = false;
 
@@ -15,106 +14,133 @@ steal(
             saveIds.push(id);
         }
 
-        function updateCreate(attributes) {
-            var attrs = {};
-            for (var i in attributes) attrs[i] = attributes[i];
-            if (typeof attrs.id == "undefined") attrs.id = saveIds.length ? saveIds.pop() : Math.floor(Math.random()*1000);
-            return can.Deferred().resolve(attrs);
-        }
+        var AutoSaveModel, AModel, BModel, XModel, YModel, CModel, DModel, EModel, MergeModel, Person;
 
         beforeEach(function() {
             autosave = true;
-            can.Model.AssociativeModel("AutoSaveModel", {
-                update: function(id, attrs) { return updateCreate(attrs); },
-                create: updateCreate
-            },
-            {
+            AutoSaveModel = can.Model( {}, {
                 init: function() {
                     var result = this;
                     if (this._super) result = this._super.apply(this, arguments);
-                    if (autosave) this.save();
-                    this.bind("monkey", function() {});
+                    if (autosave) {
+                        if (this.id == null) {
+                            this.attr("id", saveIds.length ? saveIds.pop() : Math.floor(Math.random()*1000))
+                        }
+                        this.created();
+                    }
                     return result;
                 }
             });
 
-            AutoSaveModel("AModel",
+            AModel = AutoSaveModel("Spec.AModel",
             {
                 associations : {
                     hasMany : [
-                        "BModel",
-                        {type: "XModel", through: "b_models"}
+                        "Spec.BModel",
+                        {type: "Spec.XModel", through: "b_models"}
                     ]
                 }
             },
             {});
 
-            AutoSaveModel("BModel",
+            BModel = AutoSaveModel("Spec.BModel",
             {
                 associations : {
-                    belongsTo : ["AModel", "XModel"]
+                    belongsTo : ["Spec.AModel", "Spec.XModel"]
                 }
             },
             {});
 
-            AutoSaveModel("XModel",
+            XModel = AutoSaveModel("Spec.XModel", 
             {
                 associations : {
-                    hasAndBelongsToMany: "YModel"
+                    hasAndBelongsToMany: "Spec.YModel"
                 }
             },
             {});
 
-            AutoSaveModel("YModel",
+            YModel = AutoSaveModel("Spec.YModel", 
             {
                 associations : {
-                    hasAndBelongsToMany : "XModel"
+                    hasAndBelongsToMany : "Spec.XModel"
                 }
             },
             {});
 
-            AutoSaveModel("CModel",
+            CModel = AutoSaveModel("Spec.CModel", 
             {
                 associations : {
-                    hasMany : { type: "DModel", inverseName: "d_able" }
+                    hasMany : { type: "Spec.DModel", inverseName: "d_able" }
                 }
             },
             {});
 
-            AutoSaveModel("DModel",
+            DModel = AutoSaveModel("Spec.DModel", 
             {
                 associations : {
-                    belongsTo : { name: "d_able", polymorphic: true }
+                    belongsTo : { type: "Spec.DAble", polymorphic: true }
                 }
             },
             {});
 
-            AutoSaveModel("EModel",
+            EModel = AutoSaveModel("Spec.EModel", 
             {
                 associations : {
-                    hasMany : { type: "DModel", inverseName: "d_able" }
+                    hasMany : { type: "Spec.DModel", inverseName: "d_able" }
                 }
             },
             {});
 
-            AutoSaveModel("Person", {
+            MergeModel = AutoSaveModel("Spec.MergeModel", 
+            {
+                associations : {
+                    hasMany : { type: "Spec.AModel", replaceType: "merge" }
+                }
+            },
+            {});
+
+            Person = AutoSaveModel("Spec.Person",
+            {
                 associations: {
-                    hasAndBelongsToMany: { type: "Person", inverseName: "friends", name: "friends" },
+                    hasAndBelongsToMany: { type: "Spec.Person", inverseName: "friends", name: "friends" },
                     belongsTo: [
-                        { type: "Person", name: "boss", inverseName: "employees" },
-                        { type: "Person", name: "crush", inverseName: null }
+                        { type: "Spec.Person", name: "boss", inverseName: "employees" },
+                        { type: "Spec.Person", name: "crush", inverseName: null }
                     ],
                     hasMany: [
-                        {type: "Person", name: "employees", inverseName: "boss"},
-                        {type: "Person", name: "idles", inverseName: null}
+                        {type: "Spec.Person", name: "employees", inverseName: "boss"},
+                        {type: "Spec.Person", name: "idles", inverseName: null}
                     ]
                 }
             },
             {});
         });
-        
+
         afterEach(function() {
+            delete window.Spec;
             autosave = false;
+        });
+
+        it("checks existing contents when there is two arguments properly", function() {
+            var bModel1 = BModel.model({id: 1});
+            var bModel2 = BModel.model({id: 2});
+            var aModel = AModel.model({id: 1, b_models: [bModel1, bModel2]});
+            var input = [bModel1, bModel2];
+            aModel.b_models.push(input);
+            expect($.makeArray(aModel.b_models)).toEqual([bModel1, bModel2]);
+            expect(input).toEqual([bModel1, bModel2]); // check input isnt modified
+        });
+
+        it("merges lists when replaceType is merge", function() {
+            var aModel1 = new AModel({id: 1});
+            var aModel2 = new AModel({id: 2});
+            var mergeModel = new MergeModel({id: 1, a_models: [aModel1]});
+
+            mergeModel.attr("a_models", []);
+            expect($.makeArray(mergeModel.a_models)).toEqual([aModel1]);
+
+            mergeModel.attr("a_models", [aModel2]);
+            expect($.makeArray(mergeModel.a_models)).toEqual([aModel1, aModel2]);
         });
 
         it("triggers length listener when models are added or removed", function() {
@@ -125,8 +151,8 @@ steal(
 
             a.b_models.bind("length", spy);
 
-            var b1 = new BModel({id: 1, a_model_id: 1});
-            var b2 = new BModel({id: 2, a_model_id: 1});
+            var b1 = new BModel({id: 1, a_model: a});
+            var b2 = new BModel({id: 2, a_model: a});
 
             b1.attr("a_model_id", null);
             b2.attr("a_model_id", null);
@@ -147,12 +173,9 @@ steal(
             var spy = jasmine.createSpy();
 
             a.b_models.bind("length", spy);
-            a.b_models.bind("length", function() {
-                console.log("length");
-            });
 
-            a.attr("b_models", [1, 2]);
-            a.attr("b_models", [1]);
+            a.attr("b_models", [b1, b2]);
+            a.attr("b_models", [b1]);
             a.attr("b_models", []);
 
             expect(spy.argsForCall.length).toEqual(3);
@@ -161,10 +184,12 @@ steal(
             expect(spy.argsForCall[2][1]).toEqual(0);
         });
 
-        
+
         it("children get modeled correctly", function()
         {
             var a = new AModel({b_models: [{val: "val1"}, {val: "val2"}]});
+            expect(a).toBeTruthy();
+            expect(a.constructor).toBeTruthy();
             expect(a.b_models).toBeTruthy();
             expect(a.b_models.length).toEqual(2);
             expect(a.b_models[0].constructor).toEqual(BModel);
@@ -178,6 +203,8 @@ steal(
             var b1 = new BModel({val: "val1"});
             var b2 = new BModel({val: "val2"});
             var a = new AModel({b_models: [b1, b2]});
+            expect(a).toBeTruthy();
+            expect(a.constructor).toBeTruthy();
             expect(a.b_models).toBeTruthy();
             expect(a.b_models.length).toEqual(2);
             expect(a.b_models[0].constructor).toEqual(BModel);
@@ -185,32 +212,32 @@ steal(
             expect(b1.a_model).toEqual(a);
             expect(b2.a_model).toEqual(a);
         });
-        
+
         it("child id links back to parent", function()
         {
             var a = new AModel({id: 1, b_models: [{val: "val1", a_model_id: 1}, {val: "val2", a_model_id: 1}]});
             expect(a.b_models[0].a_model.id).toEqual(1);
             expect(a.b_models[1].a_model.id).toEqual(1);
         });
-        
+
         it("add children to existing parent one at a time", function()
         {
             var a = new AModel({id: 1});
-            var b1 = new BModel({id: 1, a_model_id: 1});
-            var b2 = new BModel({id: 2, a_model_id: 1});
-        
+            var b1 = new BModel({id: 1, a_model: a});
+            var b2 = new BModel({id: 2, a_model: a});
+
             expect(b1.a_model.id).toEqual(1);
             expect(b2.a_model.id).toEqual(1);
             expect(a.b_models.length).toEqual(2);
             expect(a.b_models[0].id).toEqual(1);
             expect(a.b_models[1].id).toEqual(2);
         });
-        
-        it("children with no id get added", function()
+
+        it("children with no id get added on creation", function()
         {
             var a = new AModel({id: 1});
-            var bs = BModel.models([{a_model_id: 1, val: "monkey"}, {a_model_id: 1, val: "banana"}]);
-        
+            var bs = BModel.models([{a_model: a, val: "monkey"}, {a_model: a, val: "banana"}]);
+
             expect(bs[0].a_model.id).toEqual(1);
             expect(bs[1].a_model.id).toEqual(1);
             expect(a.b_models.length).toEqual(2);
@@ -244,7 +271,7 @@ steal(
             var a = new AModel();
             var b = new BModel();
 
-            a.attr("b_models", BModel.models([b]));
+            a.attr("b_models", [b]);
 
             expect(b.a_model).toEqual(a);
             expect(a.b_models.length).toEqual(1);
@@ -353,17 +380,6 @@ steal(
             expect(y.x_models.length).toEqual(0);
         });
 
-        it ("setting id creates relationship and sets both fields", function() {
-            var a = new AModel({id: 1});
-            var b = new BModel({id: 1});
-
-            b.attr("a_model_id", 1);
-
-            expect(b.a_model_id).toEqual(1);
-            expect(b.a_model).toEqual(a);
-            expect(a.b_models[0]).toEqual(b);
-        });
-
         it ("setting model sets both fields", function() {
             var a = new AModel({id: 1});
             var b = new BModel({id: 1});
@@ -391,12 +407,16 @@ steal(
         it("removes model from hasmany list when destroyed", function() {
             var a = new AModel();
             var b = new BModel();
+            var removeSpy = jasmine.createSpy();
 
             a.attr("b_models", [b]);
 
+            // The list must be bounded to for the removes to be tracked
+            a.b_models.bind("remove", removeSpy);
             b.destroyed();
 
             expect(a.b_models.length).toEqual(0);
+            expect($.makeArray(removeSpy.argsForCall[0][1])).toEqual([b])
         });
 
         it("removes model from belongs to when destroyed", function() {
@@ -419,23 +439,8 @@ steal(
             b1.attr("a_model", a2);
 
             a1.destroyed();
-            
+
             expect(b1.a_model).toEqual(a2);
-        });
-
-        it("filters attributes to send only belongs to id to server", function() {
-            var a = new AModel({id: 8});
-            var b = new BModel({id: 42});
-
-            spyOn(BModel, "update").andCallThrough();
-
-            b.attr("a_model", a);
-            b.save();
-
-            var data = BModel.update.argsForCall[0][1];
-
-            expect(data["a_model_id"]).toEqual(8);
-            expect(data["a_model"]).toBeUndefined();
         });
 
         it("allows construction of model that belongs to polymorphic parent", function()
@@ -459,11 +464,11 @@ steal(
             expect(c.d_models[1].d_able).toEqual(c);
         });
 
-        it("links back ids one at a time for models that belongs to polymorphic parent", function()
+        it("links back models that belong to polymorphic parent", function()
         {
             var c = new CModel({id: 1});
-            var d1 = new DModel({val: "val1", id: 1, d_able_id: 1, d_able_type: "CModel"});
-            var d2 = new DModel({val: "val2", id: 2, d_able_id: 1, d_able_type: "CModel"});
+            var d1 = new DModel({val: "val1", id: 1, d_able: c});
+            var d2 = new DModel({val: "val2", id: 2, d_able: c});
             expect(c.d_models.length).toEqual(2);
             expect(c.d_models[0]).toEqual(d1);
             expect(c.d_models[1]).toEqual(d2);
@@ -575,17 +580,20 @@ steal(
             expect(c.d_models.length).toEqual(0);
         });
 
-        it("can set the poly model in order id then type", function() {
-            var c = new CModel({id: 1});
-            var d = new DModel();
+        it("has set all attributes before events are called", function() {
+            var a = new AModel({id: 8});
+            a.attr("b_models", []);
+            var callbackCalled = false;
+            a.b_models.bind("add", function(ev, newItems) {
+                expect(newItems[0].val).toEqual(10);
+                callbackCalled = true;
+            });
+            var b = new BModel({id: 42, a_model: a, val: 10});
 
-            d.attr("d_able_id", 1);
-            d.attr("d_able_type", c.constructor.fullName);
-
-            expect(d.d_able).toEqual(c);
+            expect(callbackCalled).toBeTruthy();
         });
-        
-        it("does not propegate belongs to relation ships until saved", function() {
+
+        it("does not propegate belongs to relation ships until created", function() {
             autosave = false;
 
             var a = new AModel();
@@ -596,7 +604,8 @@ steal(
             expect(b.a_model).toEqual(a);
             expect(a.b_models.length).toEqual(0);
 
-            b.save();
+            b.attr("id", 10);
+            b.created();
 
             expect(b.a_model).toEqual(a);
             expect(a.b_models.length).toEqual(1);
@@ -614,8 +623,9 @@ steal(
             expect(b.a_model).toBeUndefined();
             expect(a.b_models.length).toEqual(1);
             expect(a.b_models[0]).toEqual(b);
-            
-            a.save();
+
+            a.attr("id", 10);
+            a.created();
 
             expect(b.a_model).toEqual(a);
             expect(a.b_models.length).toEqual(1);
@@ -714,7 +724,7 @@ steal(
             expect($.makeArray(removeSpy.argsForCall[2][1])).toEqual([b1, b2, b3]);
         });
 
-        it("associates through models when created", function() {
+        it("associates via models when created", function() {
             var x = new XModel();
             var b = new BModel({x_model: x});
             var a = new AModel({b_models: [b]});
@@ -722,7 +732,35 @@ steal(
             expect($.makeArray(a.x_models)).toEqual([x]);
         });
 
-        it("associates through models does not contain duplicates", function() {
+        it("via lists keep up to date with parent", function() {
+            var x = new XModel();
+            var b = new BModel({x_model: x});
+            var a = new AModel({b_models: [b]});
+
+            a.b_models.remove(b);
+            expect($.makeArray(a.x_models)).toEqual([]);
+
+            a.b_models.push(b);
+            expect($.makeArray(a.x_models)).toEqual([x]);
+
+            a.b_models.removeAll(b);
+            expect($.makeArray(a.x_models)).toEqual([]);
+        });
+
+        it("waits for model to be created before associating via", function() {
+            autosave = false;
+            var x = new XModel();
+            autosave = true;
+            var b = new BModel({x_model: x});
+            var a = new AModel({b_models: [b]});
+
+            expect($.makeArray(a.x_models)).toEqual([]);
+            x.attr("id", 5);
+            x.created();
+            expect($.makeArray(a.x_models)).toEqual([x]);
+        });
+
+        it("associates via models does not contain duplicates", function() {
             var x1 = new XModel();
             var x2 = new XModel();
             var b1 = new BModel({x_model: x1});
@@ -750,7 +788,7 @@ steal(
         it("updates associates when the source changes", function() {
             var x1 = new XModel();
             var x2 = new XModel();
-            var b = new BModel({x_model: x1});
+            var b = new BModel({id: 1337, x_model: x1});
             var a = new AModel({b_models: [b]});
 
             expect($.makeArray(a.x_models)).toEqual([x1]);

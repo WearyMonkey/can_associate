@@ -13,8 +13,7 @@ steal(
     }
 
     var splice = [].splice,
-        pop = [].pop,
-        lists = {};
+        pop = [].pop;
 
     can.Model.List("can.Model.AssociativeList",
     {
@@ -32,12 +31,11 @@ steal(
 
             this.containedClass = containedClass;
             this.namespaceToIndex = {};
-            var namespace = containedClass.fullName + ".List";
-            this.constructor = lists[namespace] = lists[namespace] || can.Model.List(namespace);
         },
 
         push: function() {
             var args = getArgs(arguments),
+                copied = false,
                 oldLength = this.length,
                 i;
 
@@ -46,7 +44,11 @@ steal(
                     namespace = model._cid;
 
                 if (this.namespaceToIndex[namespace] >= 0) {
-                    args.splice(i, 1);
+                    if (!copied) {
+                        args = $.merge([], args);
+                        copied = true;
+                    }
+                    args.splice(i--, 1);
                 } else {
                     this.namespaceToIndex[namespace] = oldLength++;
                     addRelationShip(this, model);
@@ -93,12 +95,11 @@ steal(
                 }
             }
 
-            var ret = new can.Model.List(list);
-            if (ret.length) {
-                this._triggerChange("0", "remove", undefined, ret);
+            if (list.length) {
+                this._triggerChange("0", "remove", undefined, list);
             }
 
-            return ret;
+            return new can.Model.List(list);
         },
 
         /**
@@ -182,20 +183,20 @@ steal(
             ownerModel = self.ownerModel,
             hasAndBelongsToMany = self.hasAndBelongsToMany;
 
-        newItem.one("destroyed." + self._cid, function() {
+        newItem.bind("destroyed." + self._cid, function() {
             self.remove([newItem]);
         });
 
         if (!inverseName) return;
 
-        if (ownerModel.isNew()) ownerModel.bind("created."+newItem.local.id, function() { addRelationShip(self, newItem) });
+        if (ownerModel.isNew()) ownerModel.bind("created."+newItem._cid, function() { addRelationShip(self, newItem) });
         else if (hasAndBelongsToMany) {
             if (!newItem[inverseName]) {
                 newItem[inverseName] = new self.constructor(newItem, ownerModel.constructor, inverseName, name, true);
             }
             newItem[inverseName].push(ownerModel);
         } else {
-            if (!newItem[inverseName] || newItem[inverseName].local.id != ownerModel.local.id) {
+            if (!newItem[inverseName] || newItem[inverseName] != ownerModel) {
                 newItem.attr(inverseName, ownerModel);
             }
         }
@@ -210,11 +211,11 @@ steal(
 
         if (!inverseName) return;
 
-        ownerModel.unbind("created."+oldItem.local.id);
+        ownerModel.unbind("created."+oldItem._cid);
         if (hasAndBelongsToMany) {
             if (oldItem[inverseName]) oldItem[inverseName].remove(ownerModel);
         } else {
-            if (oldItem[inverseName] && oldItem[inverseName].local.id == ownerModel.local.id) {
+            if (oldItem[inverseName] && oldItem[inverseName] == ownerModel) {
                 oldItem.attr(inverseName, null);
             }
         }

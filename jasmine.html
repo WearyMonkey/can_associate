@@ -4,25 +4,23 @@
 <head>
     <title>Jasmine Spec Runner</title>
 
-    <link rel="shortcut icon" type="image/png" href="./test/jasmine-1.1.0/jasmine_favicon.png">
-
-    <link rel="stylesheet" type="text/css" href="./test/jasmine-1.1.0/jasmine.css">
-    <script type="text/javascript" src="./test/jasmine-1.1.0/jasmine.js"></script>
-    <script type="text/javascript" src="./test/jasmine-1.1.0/jasmine-html.js"></script>
+    <link rel="stylesheet" type="text/css" href="./test/jasmine-1.2.0/jasmine.css">
+    <script type="text/javascript" src="./test/jasmine-1.2.0/jasmine.js"></script>
+    <script type="text/javascript" src="./test/jasmine-1.2.0/jasmine-html.js"></script>
 
     <script type='text/javascript' src='../../steal/steal.js'></script>
     <script type='text/javascript'>
-        steal('can/assoc/test/specs/associative_model_spec.js').then(function() {
+        steal('can_associate/test/specs/associative_model_spec.js').then(function() {
             (function() {
                 var jasmineEnv = jasmine.getEnv();
                 jasmineEnv.updateInterval = 1000;
 
-                var htmlReporter = new jasmine.HtmlReporter();
+                var reporter = new jasmine.TrivialReporter();
 
-                jasmineEnv.addReporter(htmlReporter);
+                jasmineEnv.addReporter(reporter);
 
                 jasmineEnv.specFilter = function(spec) {
-                    return htmlReporter.specFilter(spec);
+                    return reporter.specFilter(spec);
                 };
 
                 jasmineEnv.execute();

@@ -12,8 +12,8 @@ steal(
 
     can.extend(can.Model, {
         setup: function( superClass , stat, proto) {
-            if (this == can.Model.AssociativeModel) return;
             orgClassSetup.apply(this, arguments);
+            if (this == can.Model) return;
             var self = this;
             can.forEachAssociation(this.associations, function(assocType, association) {
                 factories[assocType](self, association);
@@ -64,9 +64,13 @@ steal(
     can.getModel = function(clazz, obj) {
         var clazzName = clazz._shortName;
 
-        if (obj instanceof clazz) return obj;
-        else if (tmpCache && tmpCache[clazzName] && can.isId(obj) && tmpCache[clazzName][obj]) return tmpCache[clazzName][obj];
-        else return clazz.model.call(clazz, obj);
+        if (obj instanceof clazz) {
+            return obj;
+        } else if (can.isId(obj)) {
+            return tmpCache && tmpCache[clazzName] && tmpCache[clazzName][obj]
+        } else {
+            return clazz.model.call(clazz, obj);
+        }
     };
 
     var factories = {
@@ -78,7 +82,7 @@ steal(
                 oldSetId = clazz.prototype["set"+cap+"Id"],
                 idName = name+"_id";
 
-            if (typeof association.inverseName == "undefined") association.inverseName = $.pluralize(clazz._shortName);
+            if (typeof association.inverseName == "undefined") association.inverseName = can.pluralize(clazz._shortName);
 
             clazz.prototype["set"+cap] = function(v) {
 
@@ -171,29 +175,49 @@ steal(
         },
 
         hasMany: function(clazz, association, hasAndBelongsToMany) {
-            var inverseType = association.type,
-                name = association.name = association.name || can.pluralize(can.underscore( inverseType.match(/\w+$/)[0] )),
+            var type = association.type,
+                name = association.name = association.name || can.pluralize(can.underscore( type.match(/\w+$/)[0] )),
+                inverseClazz, inverseAssociation,
                 cap = can.classize(name),
-                oldSet =  clazz.prototype["set"+cap],
-                inverseClass;
+                oldSet =  clazz.prototype["set"+cap];
 
             if (typeof association.inverseName == "undefined") {
-                association.inverseName = hasAndBelongsToMany ? $.pluralize(clazz._shortName) : clazz._shortName;
+                association.inverseName = hasAndBelongsToMany ? can.pluralize(clazz._shortName) : clazz._shortName;
             }
 
             clazz.prototype["set"+cap] = function(newItems) {
-                var inverseName = association.inverseName;
+                var inverseName = association.inverseName,
+                    newModels, oldInverseAssociationInverseName;
 
-                inverseClass = inverseClass || can.getObject(inverseType);
+                inverseClazz = inverseClazz || can.getObject(type);
+                inverseAssociation = inverseAssociation || getInverseAssociation(association, inverseClazz.associations);
 
-                var newModels = $.map(newItems, function(newItem) {
-                    return can.getModel(inverseClass, newItem)
-                });
+                if (newItems.length) {
+
+                    // turn of the child association invserse as we are about to set it anyway
+                    if (inverseAssociation) {
+                        oldInverseAssociationInverseName = inverseAssociation.inverseName;
+                        inverseAssociation.inverseName = null;
+                    }
+
+                    newModels = [];
+                    for (var i = 0; i < newItems.length; i++) {
+                        newModels.push(can.getModel(inverseClazz, newItems[i]));
+                    }
+
+                    // make sure we turn the inverse back on again
+                    if (inverseAssociation) {
+                        inverseAssociation.inverseName = oldInverseAssociationInverseName;
+                    }
+
+                } else {
+                    newModels = newItems;
+                }
 
                 // If its initing and the list already exists, that means the children models already created it
                 if (!this._init || !this[name]) {
                     if (!this[name]) {
-                        var list = new List(this, inverseClass, name, inverseName, hasAndBelongsToMany);
+                        var list = new List(this, inverseClazz, name, inverseName, hasAndBelongsToMany);
                         if (oldSet) oldSet.call(this, list);
                         else this[name] = list;
                     }
@@ -202,17 +226,32 @@ steal(
                     } else {
                         this[name].replace(newModels);
                     }
+
                     return this[name];
                 } else {
                     if (newModels.length != this[name].length) this[name].push(newModels);
                     return this[name];
                 }
             };
+
+            return association;
         },
 
         hasAndBelongsToMany: function(clazz, association) {
-            return hasMany(clazz, association, true);
+            return this.hasMany(clazz, association, true);
         }
+    }
+
+    function getInverseAssociation(of, from) {
+        for (var type in from) {
+            for (var i = 0; i < from[type].length; ++i) {
+                var otherAssoc = from[type][i];
+                if (otherAssoc.inverseName == of.name && otherAssoc.name == of.inverseName) {
+                    return otherAssoc;
+                }
+            }
+        }
+        return null;
     }
 });
 

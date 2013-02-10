@@ -50,26 +50,15 @@ steal(
                 }
             }
 
-            this._assocData.polyIgnoreId = true;
-            this._assocData.polyIgnoreType = true;
+            updateIdOrType(this, typeName, newItem, true);
+            updateIdOrType(this, idName, newItem, false);
 
             oldSet.apply(this, [newItem]);
-
-            var oldType = this[typeName];
-            var newType = null;
-            if (newItem) newType = newItem.constructor.shortName;
-            if (typeof oldType == "undefined" || oldType != newType)
-            {
-                this.attr(typeName, newType);
-            }
-
-            delete this._assocData.polyIgnoreId;
-            delete this._assocData.polyIgnoreType;
         };
 
         self.prototype["set"+cap+"Id"] = function(id) {
             if (this[idName] === id) return id;
-            if (can.isId(id) && can.isId(this[idName]) && !this._assocData.polyIgnoreId) throw "Should not use id for polymorphic relationship";
+            if (can.isId(id) && can.isId(this[idName])) throw "Should not use id for polymorphic relationship";
 
             this[idName] = id;
 
@@ -92,7 +81,7 @@ steal(
             var typeName = name+"_type";
             var idName = name+"_id";
             if (this[typeName] === polyType) return polyType;
-            if (polyType && typeof this[typeName]  !== "undefined" && !this._assocData.polyIgnoreType) throw "Should not use type for polymorphic relationship";
+            if (polyType && typeof this[typeName] !== "undefined") throw "Should not use type for polymorphic relationship";
             delete this._assocData.polyIgnoreType;
 
             polyType = polyType ? can.classize(polyType) : polyType;
@@ -117,6 +106,24 @@ steal(
 
             return this[typeName];
 
+        }
+    }
+
+    function updateIdOrType(self, attr, newItem, isType) {
+        var oldVal = self[attr],
+            newVal = null,
+            how;
+
+        if (newItem) {
+            newVal = isType ? newItem.constructor.shortName : newItem.id;
+            how = oldVal ? "add" : "update";
+        } else {
+            how = "remove";
+        }
+
+        if (typeof oldVal == "undefined" || oldVal != newVal) {
+            self[attr] = newVal;
+            self._triggerChange(attr, how, newVal, oldVal)
         }
     }
 
