@@ -168,10 +168,21 @@ steal(
          */
         indexOf: function(model) {
             return this.namespaceToIndex[model._cid];
+        },
+
+        /**
+         * Only realy here to support the can.Model splice on destroy
+         *
+         * todo complete implementation
+         */
+        splice: function(index, howMany) {
+            for (var i = 0; i < howMany; ++i) {
+                this.remove(this[index+i]);
+            }
         }
     });
 
-    can.each(['pop', 'shift', 'unshift', 'splice', 'sort'], function(i, modifier) {
+    can.each(['pop', 'shift', 'unshift', 'sort'], function(i, modifier) {
         can.Model.AssociativeList.prototype[modifier] = function() {
             throw "AssociativeList does not support modifying function: " + modifier;
         }
@@ -182,10 +193,6 @@ steal(
             inverseName = self.inverseName,
             ownerModel = self.ownerModel,
             hasAndBelongsToMany = self.hasAndBelongsToMany;
-
-        newItem.bind("destroyed." + self._cid, function() {
-            self.remove([newItem]);
-        });
 
         if (!inverseName) return;
 
@@ -206,8 +213,6 @@ steal(
         var inverseName = self.inverseName,
             ownerModel = self.ownerModel,
             hasAndBelongsToMany = self.hasAndBelongsToMany;
-
-        oldItem.unbind("destroyed." + self._cid);
 
         if (!inverseName) return;
 
