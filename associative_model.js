@@ -77,6 +77,7 @@ steal(
         belongsTo : function(clazz, association) {
             var inverseType = association.type,
                 name = association.name = association.name || can.underscore( inverseType.match(/\w+$/)[0] ),
+                inverseClass,
                 cap = can.classize(name),
                 oldSet = clazz.prototype["set"+cap],
                 oldSetId = clazz.prototype["set"+cap+"Id"],
@@ -89,19 +90,11 @@ steal(
                 var self = this,
                     oldItem = this[name],
                     oldId = this[idName],
-                    inverseClass,
                     newItem = null,
                     inverseName = association.inverseName;
 
-
-                if (v instanceof can.Model) {
-                    inverseClass = v.constructor;
-                    newItem = v;
-                } else {
-                    inverseClass = can.getObject(inverseType);
-                    newItem = v ? can.getModel(inverseClass, v) : v;
-                }
-
+                inverseClass = inverseClass || can.getObject(inverseType);
+                newItem = v ? can.getModel(inverseClass, v) : v;
 
                 if (oldSet) oldSet.call(this, newItem);
                 else this[name] = newItem;
