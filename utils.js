@@ -24,18 +24,6 @@ steal(
         else return str;
     };
 
-    can.classize = function (s, join) {
-        // this can be moved out ..
-        // used for getter setter
-        var parts = s.split(can.undHash),
-            i = 0;
-        for (; i < parts.length; i++) {
-            parts[i] = can.capitalize(parts[i]);
-        }
-
-        return parts.join(join || '');
-    };
-
     can.isId = function (id) {
         return typeof id == 'string' || typeof id == 'number';
     };
@@ -49,6 +37,14 @@ steal(
                     if (typeof association != 'object') {
                         association = associations[assocType][i] = {type: association}
                     }
+
+                    if (!association.name) {
+                        association.name = can.underscore( association.type.match(/\w+$/)[0] );
+                        if (assocType != "belongsTo") association.name = can.pluralize(association.name);
+                    }
+
+                    association.setName = association.setName || "set" + can.classize(association.name);
+
                     callback(assocType, association);
                 }
             }

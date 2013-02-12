@@ -76,16 +76,17 @@ steal(
     var factories = {
         belongsTo : function(clazz, association) {
             var inverseType = association.type,
-                name = association.name = association.name || can.underscore( inverseType.match(/\w+$/)[0] ),
+                name = association.name,
+                idName = name+"_id",
+                setName = association.setName,
+                setIdName = setName + "Id",
                 cachedInverseClass,
-                cap = can.classize(name),
-                oldSet = clazz.prototype["set"+cap],
-                oldSetId = clazz.prototype["set"+cap+"Id"],
-                idName = name+"_id";
+                oldSet = clazz.prototype[setName],
+                oldSetId = clazz.prototype[setIdName];
 
             if (typeof association.inverseName == "undefined") association.inverseName = can.pluralize(clazz._shortName);
 
-            clazz.prototype["set"+cap] = function(v) {
+            var newSet = clazz.prototype[setName] = function(v) {
 
                 var self = this,
                     oldItem = this[name],
@@ -140,7 +141,7 @@ steal(
                         inverseClass.bind("destroyed.belongsTo_"+this._cid, function(event, destroyedItem) {
                             if (destroyedItem == newItem) {
                                 inverseClass.unbind("destroyed.belongsTo_"+self._cid);
-                                self["set"+cap](null);
+                                self[setName](null);
                             }
                         });
                     }
@@ -151,7 +152,7 @@ steal(
                     inverseClass.bind("created."+this._cid, function(event, newItem) {
                         if (newItem.id == v) {
                             inverseClass.unbind("created."+self._cid);
-                            self["set"+cap](newItem);
+                            self[setName](newItem);
                         }
                     });
                 }
@@ -159,7 +160,7 @@ steal(
                 return newItem;
             };
 
-            clazz.prototype["set"+cap+"Id"] = function(id) {
+            clazz.prototype[setIdName] = function(id) {
                 var idName = name+"_id";
                 if (this[idName] === id) return id;
 
@@ -168,7 +169,7 @@ steal(
 
                 // if the id does not match the stored belongsTo, then forward id to belongsTo attr
                 if (!this[name] || this[name].id != id) {
-                    this.attr(name, id);
+                    newSet.call(this, id); //
                 }
 
                 return this[idName];
@@ -177,16 +178,16 @@ steal(
 
         hasMany: function(clazz, association, hasAndBelongsToMany) {
             var type = association.type,
-                name = association.name = association.name || can.pluralize(can.underscore( type.match(/\w+$/)[0] )),
+                name = association.name,
+                setName = association.setName,
                 inverseClazz, inverseAssociation,
-                cap = can.classize(name),
-                oldSet =  clazz.prototype["set"+cap];
+                oldSet =  clazz.prototype[setName];
 
             if (typeof association.inverseName == "undefined") {
                 association.inverseName = hasAndBelongsToMany ? can.pluralize(clazz._shortName) : clazz._shortName;
             }
 
-            clazz.prototype["set"+cap] = function(newItems) {
+            clazz.prototype[setName] = function(newItems) {
                 var inverseName = association.inverseName,
                     newModels, oldInverseAssociationInverseName;
 
