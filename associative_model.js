@@ -149,8 +149,10 @@ steal(
                 // if v is just and ID, then we should listen for a creation
                 if (!newItem && can.isId(v)) {
                     inverseClass.bind("created."+this._cid, function(event, newItem) {
-                        inverseClass.unbind("created."+self._cid);
-                        if (newItem.id == v) self["set"+cap](newItem);
+                        if (newItem.id == v) {
+                            inverseClass.unbind("created."+self._cid);
+                            self["set"+cap](newItem);
+                        }
                     });
                 }
 

@@ -121,6 +121,17 @@ steal(
             autosave = false;
         });
 
+        it("wires up models properly that referenced by id", function() {
+            var a = AModel.model({
+                id: 1,
+                b_models: [{id: 1, x_model_id: 1}, {id: 2, x_model_id: 2}],
+                x_models: [{id: 1}, {id: 2}]
+            });
+
+            expect(a.b_models[0].x_model).toEqual(a.x_models[0]);
+            expect(a.b_models[1].x_model).toEqual(a.x_models[1]);
+        });
+
         it("checks existing contents when there is two arguments properly", function() {
             var bModel1 = BModel.model({id: 1});
             var bModel2 = BModel.model({id: 2});
