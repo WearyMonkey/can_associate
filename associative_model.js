@@ -7,43 +7,121 @@ steal(
     var List = can.Model.AssociativeList,
         orgClassSetup = can.Model.setup,
         orgSetup = can.Model.prototype.setup,
+        orgSave = can.Model.prototype.save,
         orgModels = can.Model.models,
         tmpCache = null;
 
     can.extend(can.Model, {
         setup: function( superClass , stat, proto) {
             orgClassSetup.apply(this, arguments);
-            if (this == can.Model) return;
             var self = this;
+
+            if (this == can.Model) return;
+
+            this.indexAttrs = this.indexAttrs || [this.id];
+
             can.forEachAssociation(this.associations, function(assocType, association) {
                 factories[assocType](self, association);
             });
         }
     });
 
-    can.Model.prototype.setup = function(attributes) {
-        var first = false,
-            clazzName = this.constructor._shortName,
-            clazzId = this.constructor.id;
+    function getModelFromAttrs(clazz, cache, attributes) {
+        if (!attributes || !cache) return null;
 
-        if (!tmpCache) {
-            first = true;
-            tmpCache = {};
+        var clazzCache = cache[clazz._shortName] = (cache[clazz._shortName] || {});
+
+        for (var i = 0; i < clazz.indexAttrs.length; ++i) {
+            var attr = clazz.indexAttrs[i],
+                value = attributes[attr];
+
+            if (value != null && clazzCache[attr] && clazzCache[attr][value] != null) {
+                return clazzCache[attr][value];
+            }
         }
+        return null;
+    }
 
-        this._assocData = {};
+    function setAttrCaches(clazz, cache, attributes, model) {
+        if (!attributes) return;
 
-        var clazzCache = tmpCache[clazzName] = tmpCache[clazzName] || {};
-        if (attributes && attributes[clazzId]) clazzCache[attributes[clazzId]] = this;
+        var clazzCache = cache[clazz._shortName] = (cache[clazz._shortName] || {});
 
-        var result = orgSetup.call(this, attributes);
+        for (var i = 0; i < clazz.indexAttrs.length; ++i) {
+            var attr = clazz.indexAttrs[i],
+                value = attributes[attr];
 
-        if (first) {
-            tmpCache = null;
+            if (!value) continue;
+
+            if (typeof value == "string") value = value.toLowerCase();
+            clazzCache[attr] = clazzCache[attr] || {};
+            clazzCache[attr][value] = model;
         }
+    }
 
-        return result;
+    can.getModel = function(clazz, obj) {
+        var cached;
+        if (obj instanceof clazz) {
+            return obj;
+        } else if (typeof obj != "object") {
+            return getModelFromAttrs(clazz, tmpCache, {id: obj})
+        } else if (cached = getModelFromAttrs(clazz, tmpCache, obj)) {
+            cached.attr(obj);
+            return cached;
+        } else {
+            return clazz.model.call(clazz, obj);
+        }
     };
+
+    can.extend(can.Model.prototype, {
+        setup: function(attributes) {
+            var first = false;
+
+            if (!tmpCache) {
+                first = true;
+                tmpCache = {};
+            }
+
+            this._assocData = {};
+
+            setAttrCaches(this.constructor, tmpCache, attributes, this);
+
+            var result = orgSetup.call(this, attributes);
+
+            if (first) {
+                tmpCache = null;
+            }
+
+            if (this[this.constructor.id]) this.created();
+
+            return result;
+        },
+
+        save: function(attributes) {
+            var self = this,
+                saveCache = this._saveCache = {},
+                orgSerialize = can.Model.prototype.serialize;
+
+            can.Model.prototype.serialize = function() {
+                var attrs = orgSerialize.apply(this, arguments);
+                setAttrCaches(this.constructor, saveCache, attrs, this);
+            };
+
+            return orgSave.apply(this, arguments).always(function() {
+                delete self._saveCache;
+            });
+        }
+    });
+
+    can.each(["updated", "created"], function(method) {
+        var org = can.Model.prototype[method];
+        can.Model.prototype[method] = function() {
+            var orgCache = tmpCache;
+            if (this._saveCache) tmpCache = this._saveCache;
+            org.apply(this, arguments);
+            tmpCache = orgCache;
+        }
+    });
 
     can.Model.models = function(objs) {
         var first = false;
@@ -59,18 +137,6 @@ steal(
         }
 
         return result;
-    };
-
-    can.getModel = function(clazz, obj) {
-        var clazzName = clazz._shortName;
-
-        if (obj instanceof clazz) {
-            return obj;
-        } else if (can.isId(obj)) {
-            return tmpCache && tmpCache[clazzName] && tmpCache[clazzName][obj]
-        } else {
-            return clazz.model.call(clazz, obj);
-        }
     };
 
     var factories = {
