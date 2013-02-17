@@ -7,6 +7,7 @@ steal(
     var List = can.Model.AssociativeList,
         orgClassSetup = can.Model.setup,
         orgSetup = can.Model.prototype.setup,
+        orgAttr = can.Model.prototype.attr,
         orgSave = can.Model.prototype.save,
         orgModels = can.Model.models,
         tmpCache = null;
@@ -74,42 +75,55 @@ steal(
     };
 
     can.extend(can.Model.prototype, {
+
         setup: function(attributes) {
-            var first = false;
-
-            if (!tmpCache) {
-                first = true;
-                tmpCache = {};
-            }
-
             this._assocData = {};
-
-            setAttrCaches(this.constructor, tmpCache, attributes, this);
-
             var result = orgSetup.call(this, attributes);
-
-            if (first) {
-                tmpCache = null;
-            }
-
             if (this[this.constructor.id]) this.created();
-
             return result;
+        },
+
+        attr: function(attributes) {
+            if (typeof attributes == "object") {
+                var first = false;
+
+                if (!tmpCache) {
+                    first = true;
+                    tmpCache = {};
+                }
+
+                setAttrCaches(this.constructor, tmpCache, attributes, this);
+
+                var result = orgAttr.call(this, attributes);
+
+                if (first) {
+                    tmpCache = null;
+                }
+
+                return result;
+            } else {
+                return orgAttr.apply(this, arguments);
+            }
         },
 
         save: function(attributes) {
             var self = this,
                 saveCache = this._saveCache = {},
-                orgSerialize = can.Model.prototype.serialize;
+                orgSerialize = R7.Models.Roam7Model.prototype.serialize;
 
-            can.Model.prototype.serialize = function() {
+            R7.Models.Roam7Model.prototype.serialize = function() {
                 var attrs = orgSerialize.apply(this, arguments);
                 setAttrCaches(this.constructor, saveCache, attrs, this);
+                return attrs;
             };
 
-            return orgSave.apply(this, arguments).always(function() {
+            var result = orgSave.apply(this, arguments).always(function() {
                 delete self._saveCache;
             });
+
+            R7.Models.Roam7Model.prototype.serialize = orgSerialize;
+
+            return result;
         }
     });
 
