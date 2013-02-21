@@ -112,13 +112,7 @@ steal(
             if (refCount == 1) {
                 if (!self[name]) self.attr(name, new List(this, clazz, name));
                 var model = can.getModel(clazz, sourceInstance);
-                if (model.isNew()) {
-                    model.bind("created."+nameSpace, function() {
-                        self[name].push(model);
-                    });
-                } else {
-                    self[name].push(model);
-                }
+                self[name].push(model);
             }
         }
 

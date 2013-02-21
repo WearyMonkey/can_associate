@@ -430,30 +430,6 @@ steal(
             expect($.makeArray(removeSpy.argsForCall[0][1])).toEqual([b])
         });
 
-        it("removes model from belongs to when destroyed", function() {
-            var a = new AModel();
-            var b = new BModel();
-
-            b.attr("a_model", a);
-
-            a.destroyed();
-
-            expect(b.a_model).toBeNull();
-        });
-
-        it("it unbinds destruction properly", function() {
-            var a1 = new AModel();
-            var a2 = new AModel();
-            var b1 = new BModel();
-
-            b1.attr("a_model", a1);
-            b1.attr("a_model", a2);
-
-            a1.destroyed();
-
-            expect(b1.a_model).toEqual(a2);
-        });
-
         it("allows construction of model that belongs to polymorphic parent", function()
         {
             var c = new CModel({val: "val1"});
@@ -604,25 +580,6 @@ steal(
             expect(callbackCalled).toBeTruthy();
         });
 
-        it("does not propegate belongs to relation ships until created", function() {
-            autosave = false;
-
-            var a = new AModel();
-            var b = new BModel();
-
-            b.attr("a_model", a);
-
-            expect(b.a_model).toEqual(a);
-            expect(a.b_models.length).toEqual(0);
-
-            b.attr("id", 10);
-            b.created();
-
-            expect(b.a_model).toEqual(a);
-            expect(a.b_models.length).toEqual(1);
-            expect(a.b_models[0]).toEqual(b);
-        });
-
         it("does not propegate has many relation ships until saved", function() {
             autosave = false;
 
@@ -641,19 +598,6 @@ steal(
             expect(b.a_model).toEqual(a);
             expect(a.b_models.length).toEqual(1);
             expect(a.b_models[0]).toEqual(b);
-        });
-
-        it("connects has many relationships after point of creation", function() {
-            var b1 = new BModel({id: 1, a_model_id: 1});
-            var b2 = new BModel({id: 2, a_model_id: 1});
-            pushSaveId(1);
-            var a = new AModel({});
-
-            expect(b1.a_model.id).toEqual(1);
-            expect(b2.a_model.id).toEqual(1);
-            expect(a.b_models.length).toEqual(2);
-            expect(a.b_models[0].id).toEqual(1);
-            expect(a.b_models[1].id).toEqual(2);
         });
 
         it("allows for inverse names to be set on has and belongs to many", function() {
@@ -756,19 +700,6 @@ steal(
 
             a.b_models.removeAll(b);
             expect($.makeArray(a.x_models)).toEqual([]);
-        });
-
-        it("waits for model to be created before associating via", function() {
-            autosave = false;
-            var x = new XModel();
-            autosave = true;
-            var b = new BModel({x_model: x});
-            var a = new AModel({b_models: [b]});
-
-            expect($.makeArray(a.x_models)).toEqual([]);
-            x.attr("id", 5);
-            x.created();
-            expect($.makeArray(a.x_models)).toEqual([x]);
         });
 
         it("associates via models does not contain duplicates", function() {

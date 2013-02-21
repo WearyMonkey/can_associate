@@ -30,7 +30,7 @@ steal(
     function getModelFromAttrs(clazz, cache, attributes) {
         if (!attributes || !cache) return null;
 
-        var clazzCache = cache[clazz._shortName] = (cache[clazz._shortName] || {});
+        var clazzCache = getClassCache(clazz, cache);
 
         for (var i = 0; i < clazz.indexAttrs.length; ++i) {
             var attr = clazz.indexAttrs[i],
@@ -46,7 +46,7 @@ steal(
     function setAttrCaches(clazz, cache, attributes, model) {
         if (!attributes) return;
 
-        var clazzCache = cache[clazz._shortName] = (cache[clazz._shortName] || {});
+        var clazzCache = getClassCache(clazz, cache);
 
         for (var i = 0; i < clazz.indexAttrs.length; ++i) {
             var attr = clazz.indexAttrs[i],
@@ -78,23 +78,28 @@ steal(
 
         setup: function(attributes) {
             this._assocData = {};
-            var result = orgSetup.call(this, attributes);
-            if (this[this.constructor.id]) this.created();
-            return result;
+            return orgSetup.call(this, attributes);
         },
 
         attr: function(attributes) {
             if (typeof attributes == "object") {
-                var first = false;
+                var first = false,
+                    clazz = this.constructor;
 
                 if (!tmpCache) {
                     first = true;
                     tmpCache = {};
                 }
 
-                setAttrCaches(this.constructor, tmpCache, attributes, this);
+                setAttrCaches(clazz, tmpCache, attributes, this);
 
-                var result = orgAttr.call(this, attributes);
+                var result = orgAttr.call(this, attributes),
+                    id = this[clazz.id];
+
+                if (id) {
+                    var queue = getClassCache(clazz, tmpCache)._waiting[id] || [];
+                    for (var i = 0; i < queue.length; ++i) queue[i](this);
+                }
 
                 if (first) {
                     tmpCache = null;
@@ -196,44 +201,24 @@ steal(
                     // remove this from the old item inverse relationship
                     if (oldItem && (!newItem || oldItem.id != newItem.id) && oldItem[inverseName]) {
                         oldItem[inverseName].remove(this);
-                        oldItem.constructor.unbind("destroyed.belongsTo_"+this._cid);
-                        this.constructor.unbind("created.belongsTo_"+oldItem._cid);
                     }
 
                     // add this to the new items inverse relationship
                     if (newItem) {
                         if (!newItem[inverseName]) newItem.attr(inverseName, new List(newItem, this.constructor, inverseName, name, false, null));
-
-                        // only inverse association if this model is created
-                        if (!this.isNew()) {
-                            newItem[inverseName].push(this);
-                        } else {
-                            // wait until created before setting the inverse
-                            this.constructor.bind("created.belongsTo_"+newItem._cid, function(event, createdItem) {
-                                if (createdItem == self) {
-                                    self.constructor.unbind("created.belongsTo_"+newItem._cid);
-                                    newItem[inverseName].push(self);
-                                }
-                            });
-                        }
-
-                        // when the item is destroyed remove it from the association
-                        inverseClass.bind("destroyed.belongsTo_"+this._cid, function(event, destroyedItem) {
-                            if (destroyedItem == newItem) {
-                                inverseClass.unbind("destroyed.belongsTo_"+self._cid);
-                                self[setName](null);
-                            }
-                        });
+                        newItem[inverseName].push(this);
                     }
                 }
 
                 // if v is just and ID, then we should listen for a creation
                 if (!newItem && can.isId(v)) {
-                    inverseClass.bind("created."+this._cid, function(event, newItem) {
-                        if (newItem.id == v) {
-                            inverseClass.unbind("created."+self._cid);
-                            self[setName](newItem);
-                        }
+                    var _waiting = getClassCache(inverseClass, tmpCache)._waiting,
+                        done = false,
+                        queue = _waiting[v] = (_waiting[v] || []);
+
+                    queue.push(function(newItem) {
+                        if (!done) self[setName](newItem);
+                        done = true;
                     });
                 }
 
@@ -334,6 +319,15 @@ steal(
             }
         }
         return null;
+    }
+
+    function getClassCache(clazz, cache) {
+        var clazzCache = cache ? cache[clazz._shortName] : {};
+        if (!clazzCache) {
+            clazzCache = cache[clazz._shortName] = {};
+        }
+        clazzCache._waiting = clazzCache._waiting || {};
+        return clazzCache;
     }
 });
 
