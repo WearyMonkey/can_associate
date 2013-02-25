@@ -222,7 +222,7 @@ steal(
                     });
                 }
 
-                return newItem;
+                return this[name];
             };
 
             clazz.prototype[setIdName] = function(id) {
