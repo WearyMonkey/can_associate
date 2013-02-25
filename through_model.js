@@ -77,15 +77,6 @@ steal(
 
         function addThroughs(self, nameSpace, throughs) {
             for (var i = 0; i < throughs.length; ++i) {
-                (function(through) {
-                    var oldSource = through[sourceName];
-                    through.bind(sourceName+"." + nameSpace, function(ev, newSource) {
-                        removeSource(self, nameSpace, oldSource);
-                        addSource(self, nameSpace, newSource);
-                        oldSource = newSource;
-                    });
-                })(throughs[i]);
-
                 addSource(self, nameSpace, throughs[i][sourceName]);
             }
         }
