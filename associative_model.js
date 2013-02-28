@@ -15,52 +15,11 @@ steal(
     can.extend(can.Model, {
         setup: function( superClass , stat, proto) {
             orgClassSetup.apply(this, arguments);
-            var self = this;
-
-            if (this == can.Model) return;
-
             this.indexAttrs = this.indexAttrs || [this.id];
-
-            can.forEachAssociation(this.associations, function(assocType, association) {
-                factories[assocType](self, association);
-            });
         }
     });
 
-    function getModelFromAttrs(clazz, cache, attributes) {
-        if (!attributes || !cache) return null;
-
-        var clazzCache = getClassCache(clazz, cache);
-
-        for (var i = 0; i < clazz.indexAttrs.length; ++i) {
-            var attr = clazz.indexAttrs[i],
-                value = attributes[attr];
-
-            if (value != null && clazzCache[attr] && clazzCache[attr][value] != null) {
-                return clazzCache[attr][value];
-            }
-        }
-        return null;
-    }
-
-    function setAttrCaches(clazz, cache, attributes, model) {
-        if (!attributes) return;
-
-        var clazzCache = getClassCache(clazz, cache);
-
-        for (var i = 0; i < clazz.indexAttrs.length; ++i) {
-            var attr = clazz.indexAttrs[i],
-                value = attributes[attr];
-
-            if (!value) continue;
-
-            if (typeof value == "string") value = value.toLowerCase();
-            clazzCache[attr] = clazzCache[attr] || {};
-            clazzCache[attr][value] = model;
-        }
-    }
-
-    can.getModel = function(clazz, obj) {
+    can.getModel = function(clazz, obj, create) {
         var cached;
         if (obj instanceof clazz) {
             return obj;
@@ -70,7 +29,7 @@ steal(
             cached.attr(obj);
             return cached;
         } else {
-            return clazz.model.call(clazz, obj);
+            return create !== false ? clazz.model.call(clazz, obj) : null;
         }
     };
 
@@ -82,9 +41,13 @@ steal(
         },
 
         attr: function(attributes) {
+            var self = this,
+                first = false,
+                clazz = this.constructor;
+
+            setupAssociations(clazz);
+
             if (typeof attributes == "object") {
-                var first = false,
-                    clazz = this.constructor;
 
                 if (!tmpCache) {
                     first = true;
@@ -94,12 +57,12 @@ steal(
                 setAttrCaches(clazz, tmpCache, attributes, this);
 
                 var result = orgAttr.call(this, attributes),
-                    id = this[clazz.id];
+                    waiting = getClassCache(clazz, tmpCache)._waiting;
 
-                if (id) {
-                    var queue = getClassCache(clazz, tmpCache)._waiting[id] || [];
-                    for (var i = 0; i < queue.length; ++i) queue[i](this);
-                }
+                can.each(clazz.indexAttrs, function(attr) {
+                    var queue = waiting && waiting[attr] && waiting[attr][self[attr]];
+                    if (queue) for (var i = 0; i < queue.length; ++i) queue[i](self);
+                });
 
                 if (first) {
                     tmpCache = null;
@@ -158,48 +121,95 @@ steal(
         return result;
     };
 
-    var factories = {
+    function getModelFromAttrs(clazz, cache, attributes) {
+        if (!attributes || !cache) return null;
+
+        var clazzCache = getClassCache(clazz, cache);
+
+        for (var i = 0; i < clazz.indexAttrs.length; ++i) {
+            var attr = clazz.indexAttrs[i],
+                value = attributes[attr];
+
+            if (value != null && clazzCache[attr] && clazzCache[attr][value] != null) {
+                return clazzCache[attr][value];
+            }
+        }
+        return null;
+    }
+
+    function setAttrCaches(clazz, cache, attributes, model) {
+        if (!attributes) return;
+
+        var clazzCache = getClassCache(clazz, cache);
+
+        for (var i = 0; i < clazz.indexAttrs.length; ++i) {
+            var attr = clazz.indexAttrs[i],
+                value = attributes[attr];
+
+            if (!value) continue;
+
+            clazzCache[attr] = clazzCache[attr] || {};
+            clazzCache[attr][value] = model;
+        }
+    }
+
+    function setupAssociations(clazz) {
+        if (!clazz._assocsSetup) {
+            clazz._assocsSetup = true;
+
+            can.forEachAssociation(clazz.associations, function(assocType, association) {
+                can.each(can.AssocFactories, function(factory) {
+                    if (factory[assocType]) factory[assocType](clazz, association);
+                });
+
+            });
+        }
+    }
+
+    can.AssocFactories = [{
         belongsTo : function(clazz, association) {
             var inverseType = association.type,
                 name = association.name,
-                idName = name+"_id",
+                cachedInverseClass = can.getObject(inverseType),
+                cachedIdAttr = name + "_" + (cachedInverseClass && cachedInverseClass.id),
                 setName = association.setName,
-                setIdName = setName + "Id",
-                cachedInverseClass,
-                oldSet = clazz.prototype[setName],
-                oldSetId = clazz.prototype[setIdName];
+                oldSet = clazz.prototype[setName];
 
             if (typeof association.inverseName == "undefined") association.inverseName = can.pluralize(clazz._shortName);
 
-            var newSet = clazz.prototype[setName] = function(v) {
-
-                var self = this,
-                    oldItem = this[name],
-                    oldId = this[idName],
+            var newSet = clazz.prototype[setName] = function(value, setId) {
+                var oldItem = this[name],
                     inverseName = association.inverseName,
                     newItem,
-                    inverseClass;
+                    inverseClass,
+                    idAttr;
 
-                if (v instanceof can.Model) {
-                    inverseClass = v.constructor;
-                    newItem = v;
+                if (value instanceof can.Model) {
+                    inverseClass = value.constructor;
+                    idAttr = name + "_" + inverseClass.id;
+                    newItem = value;
                 } else {
-                    inverseClass = cachedInverseClass = (cachedInverseClass ||  can.getObject(inverseType));
-                    newItem = v ? can.getModel(inverseClass, v) : v;
+                    inverseClass = cachedInverseClass;
+                    idAttr = cachedIdAttr;
+                    newItem = value ? can.getModel(inverseClass, value) : value;
                 }
 
                 if (oldSet) oldSet.call(this, newItem);
                 else this[name] = newItem;
 
-                // if newItem is null or undefined, than the id should be the same, e.g. story => undefined story_id => undefined
-                var newId = can.isId(v) ? v : newItem ? newItem[newItem.constructor.id] : newItem;
-                if (typeof oldId == "undefined" || oldId != newId) {
-                    this.attr(idName, newId);
+                if (setId !== false) {
+                    // if newItem is null or undefined, than the id should be the same, e.g. story => undefined story_id => undefined
+                    var oldId = this[idAttr],
+                        newId = can.isId(value) ? value : newItem ? newItem[inverseClass.id] : newItem;
+
+                    if (typeof oldId == "undefined" || oldId != newId) {
+                        this.attr(idAttr, newId);
+                    }
                 }
 
                 if (inverseName) {
                     // remove this from the old item inverse relationship
-                    if (oldItem && (!newItem || oldItem.id != newItem.id) && oldItem[inverseName]) {
+                    if (oldItem && (!newItem || oldItem[inverseClass.id] != newItem[inverseClass.id]) && oldItem[inverseName]) {
                         oldItem[inverseName].remove(this);
                     }
 
@@ -210,35 +220,48 @@ steal(
                     }
                 }
 
-                // if v is just and ID, then we should listen for a creation
-                if (!newItem && can.isId(v)) {
-                    var _waiting = getClassCache(inverseClass, tmpCache)._waiting,
-                        done = false,
-                        queue = _waiting[v] = (_waiting[v] || []);
-
-                    queue.push(function(newItem) {
-                        if (!done) self[setName](newItem);
-                        done = true;
-                    });
-                }
-
                 return this[name];
             };
 
-            clazz.prototype[setIdName] = function(id) {
-                var idName = name+"_id";
-                if (this[idName] === id) return id;
 
-                if (oldSetId) oldSetId.call(this, id);
-                else this[idName] = id;
+            if (cachedInverseClass) {
+                can.each(cachedInverseClass.indexAttrs, function(inverseAttr) {
+                    var attr = name + "_" + inverseAttr,
+                        setIdName = ("set" + can.classize(attr)),
+                        oldSet = clazz.prototype[setIdName];
 
-                // if the id does not match the stored belongsTo, then forward id to belongsTo attr
-                if (!this[name] || this[name].id != id) {
-                    newSet.call(this, id); //
-                }
+                    clazz.prototype[setIdName] = function(value) {
+                        if (this[attr] === value) return value;
 
-                return this[idName];
-            };
+                        if (oldSet) oldSet.call(this, value);
+                        else this[attr] = value;
+
+                        // if the value does not match the stored belongsTo, then forward value to belongsTo attr
+                        if (!this[name] || this[name][inverseAttr] != value) {
+                            var obj = {};
+                            obj[inverseAttr] = value;
+                            var model = can.getModel(cachedInverseClass, obj, false);
+                            newSet.call(this, model, !!model);
+                            if (!model) {
+                                var self = this,
+                                    waiting = getClassCache(cachedInverseClass, tmpCache)._waiting,
+                                    done = false;
+
+                                waiting[inverseAttr] = waiting[inverseAttr] || {};
+                                var queue = waiting[inverseAttr][value] = waiting[inverseAttr][value] || [];
+
+                                queue.push(function(newItem) {
+                                    if (!done) self[setName](newItem);
+                                    done = true;
+                                });
+                            }
+
+                        }
+
+                        return this[attr];
+                    };
+                })
+            }
         },
 
         hasMany: function(clazz, association, hasAndBelongsToMany) {
@@ -307,7 +330,7 @@ steal(
         hasAndBelongsToMany: function(clazz, association) {
             return this.hasMany(clazz, association, true);
         }
-    };
+    }];
 
     function getInverseAssociation(of, from) {
         for (var type in from) {

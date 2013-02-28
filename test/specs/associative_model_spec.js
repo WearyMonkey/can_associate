@@ -726,24 +726,5 @@ steal(
             a.b_models.push(b2);
             expect($.makeArray(a.x_models)).toEqual([x1]);
         });
-
-        it("updates associates when the source changes", function() {
-            var x1 = new XModel();
-            var x2 = new XModel();
-            var b = new BModel({id: 1337, x_model: x1});
-            var a = new AModel({b_models: [b]});
-
-            expect($.makeArray(a.x_models)).toEqual([x1]);
-
-            b.attr("x_model", x2);
-            expect($.makeArray(a.x_models)).toEqual([x2]);
-
-            b.attr("x_model", null);
-            expect($.makeArray(a.x_models)).toEqual([]);
-
-            b.attr("x_model", x1);
-            expect($.makeArray(a.x_models)).toEqual([x1]);
-        });
-
     });
 });

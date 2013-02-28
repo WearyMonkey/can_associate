@@ -41,16 +41,16 @@ steal(
 
             for (i = 0; i < args.length; i++) {
                 var model = args[i] = can.getModel(this.containedClass, args[i]),
-                    namespace = model._cid;
+                    key = getKey(model);
 
-                if (this.namespaceToIndex[namespace] >= 0) {
+                if (this.namespaceToIndex[key] >= 0) {
                     if (!copied) {
                         args = $.merge([], args);
                         copied = true;
                     }
                     args.splice(i--, 1);
                 } else {
-                    this.namespaceToIndex[namespace] = oldLength++;
+                    this.namespaceToIndex[key] = oldLength++;
                     addRelationShip(this, model);
                 }
             }
@@ -83,13 +83,13 @@ steal(
                 } else if (index < this.length - 1) {
                     found = this[index];
                     this[index] = this[this.length - 1];
-                    this.namespaceToIndex[this[index]._cid] = index;
+                    this.namespaceToIndex[getKey(this[index])] = index;
                     --this.length;
                 }
 
                 if (found) {
                     this._changed = true;
-                    delete this.namespaceToIndex[found._cid];
+                    delete this.namespaceToIndex[getKey(found)];
                     removeRelationShip(this, found);
                     list.push(found);
                 }
@@ -143,9 +143,10 @@ steal(
                 toRemoveModels = $.extend({}, this.namespaceToIndex);
 
             for (var i = 0; i < args.length; i++) {
-                var model = can.getModel(this.containedClass, args[i]);
-                if (toRemoveModels[model._cid] != null) {
-                    delete toRemoveModels[model._cid];
+                var model = can.getModel(this.containedClass, args[i]),
+                    key = getKey(model);
+                if (toRemoveModels[key] != null) {
+                    delete toRemoveModels[key];
                 } else {
                     toAdd.push(model)
                 }
@@ -167,7 +168,7 @@ steal(
          * @param model model to find index of
          */
         indexOf: function(model) {
-            return this.namespaceToIndex[model._cid];
+            return this.namespaceToIndex[getKey(model)];
         },
 
         /**
@@ -187,6 +188,10 @@ steal(
             throw "AssociativeList does not support modifying function: " + modifier;
         }
     });
+
+    function getKey(model) {
+        return model[model.constructor.id] || model._cid;
+    }
 
     function addRelationShip(self, newItem) {
         var name = self.name,
