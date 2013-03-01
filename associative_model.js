@@ -171,40 +171,40 @@ steal(
             var inverseType = association.type,
                 name = association.name,
                 cachedInverseClass = can.getObject(inverseType),
-                cachedIdAttr = name + "_" + (cachedInverseClass && cachedInverseClass.id),
                 setName = association.setName,
                 oldSet = clazz.prototype[setName];
 
             if (typeof association.inverseName == "undefined") association.inverseName = can.pluralize(clazz._shortName);
 
             var newSet = clazz.prototype[setName] = function(value, setId) {
-                var oldItem = this[name],
+                var self = this,
+                    oldItem = this[name],
                     inverseName = association.inverseName,
                     newItem,
-                    inverseClass,
-                    idAttr;
+                    inverseClass;
 
                 if (value instanceof can.Model) {
                     inverseClass = value.constructor;
-                    idAttr = name + "_" + inverseClass.id;
                     newItem = value;
                 } else {
                     inverseClass = cachedInverseClass;
-                    idAttr = cachedIdAttr;
                     newItem = value ? can.getModel(inverseClass, value) : value;
                 }
 
                 if (oldSet) oldSet.call(this, newItem);
                 else this[name] = newItem;
 
-                if (setId !== false) {
+                if (inverseClass && setId !== false) {
                     // if newItem is null or undefined, than the id should be the same, e.g. story => undefined story_id => undefined
-                    var oldId = this[idAttr],
-                        newId = can.isId(value) ? value : newItem ? newItem[inverseClass.id] : newItem;
+                    can.each(inverseClass.indexAttrs, function(attr) {
+                        var inverseAttr = name + "_" + attr,
+                            oldId = this[inverseAttr],
+                            newId = newItem ? newItem[attr] : null;
 
-                    if (typeof oldId == "undefined" || oldId != newId) {
-                        this.attr(idAttr, newId);
-                    }
+                        if (oldId != newId) {
+                            self.attr(inverseAttr, newId);
+                        }
+                    });
                 }
 
                 if (inverseName) {
