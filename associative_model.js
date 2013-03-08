@@ -198,7 +198,7 @@ steal(
                     // if newItem is null or undefined, than the id should be the same, e.g. story => undefined story_id => undefined
                     can.each(inverseClass.indexAttrs, function(attr) {
                         var inverseAttr = name + "_" + attr,
-                            oldId = this[inverseAttr],
+                            oldId = self[inverseAttr],
                             newId = newItem ? newItem[attr] : null;
 
                         if (oldId != newId) {
