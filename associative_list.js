@@ -201,8 +201,7 @@ steal(
 
         if (!inverseName) return;
 
-        if (ownerModel.isNew()) ownerModel.bind("created."+newItem._cid, function() { addRelationShip(self, newItem) });
-        else if (hasAndBelongsToMany) {
+        if (hasAndBelongsToMany) {
             if (!newItem[inverseName]) {
                 newItem[inverseName] = new self.constructor(newItem, ownerModel.constructor, inverseName, name, true);
             }

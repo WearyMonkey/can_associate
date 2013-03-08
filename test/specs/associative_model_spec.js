@@ -580,26 +580,6 @@ steal(
             expect(callbackCalled).toBeTruthy();
         });
 
-        it("does not propegate has many relation ships until saved", function() {
-            autosave = false;
-
-            var a = new AModel();
-            var b = new BModel();
-
-            a.attr("b_models", [b]);
-
-            expect(b.a_model).toBeUndefined();
-            expect(a.b_models.length).toEqual(1);
-            expect(a.b_models[0]).toEqual(b);
-
-            a.attr("id", 10);
-            a.created();
-
-            expect(b.a_model).toEqual(a);
-            expect(a.b_models.length).toEqual(1);
-            expect(a.b_models[0]).toEqual(b);
-        });
-
         it("allows for inverse names to be set on has and belongs to many", function() {
             var p1 = new Person({id: 1});
             var p2 = new Person({id: 2});
