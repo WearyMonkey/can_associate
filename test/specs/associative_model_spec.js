@@ -814,5 +814,17 @@ steal(
             expect($.makeArray(a.x_models)).toEqual([x1]);
         });
 
+        it("it serializes a polymophic attribute with type and id", function() {
+            // disable the inverse for now until we implement recursive serialize properly
+            DModel.associations.belongsTo[0].inverseName = null;
+
+            var a = AModel.model({id: 1});
+            var d = DModel.model({id: 2, d_able: a});
+
+            var json = d.serialize();
+
+            expect(json).toEqual({id: 2, d_able_id: 1, d_able: {id: 1}, d_able_type: "AModel"});
+        })
+
     });
 });
