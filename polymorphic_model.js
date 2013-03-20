@@ -48,7 +48,7 @@ steal(
                 updateIdOrType(this, typeName, newItem, true);
                 updateIdOrType(this, idName, newItem, false);
 
-                oldSet.apply(this, [newItem]);
+                return oldSet.apply(this, [newItem]);
             };
 
             self.prototype["set"+cap+"Id"] = function(id) {
@@ -118,7 +118,7 @@ steal(
         }
 
         if (typeof oldVal == "undefined" || oldVal != newVal) {
-            self[attr] = newVal;
+            self._data[attr] = self[attr] = newVal;
             self._triggerChange(attr, how, newVal, oldVal)
         }
     }
