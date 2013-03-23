@@ -35,12 +35,9 @@ steal(
 
     can.extend(can.Model.prototype, {
 
-        setup: function(attributes) {
-            this._assocData = {};
-            return orgSetup.call(this, attributes);
-        },
-
         attr: function(attributes) {
+            if (!this._assocData) this._assocData = {};
+
             var self = this,
                 first = false,
                 clazz = this.constructor;
